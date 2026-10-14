@@ -1,0 +1,70 @@
+BOOKING CRM v5 — RUN AND UPGRADE
+
+1. Python 3.11+ recommended.
+   pip install -r requirements.txt
+   uvicorn main:app --reload
+
+2. Visit /admin, initial password admin123 (change before making the site public).
+   Preview links: enter a name, choose a niche, optionally logo/layout/theme.
+   The short link auto-saves after a brief typing pause. Copy Link is enabled
+   only after the link exists on the server. Editing never mutates an older link.
+
+3. Visit /admin/outbound from the CRM navigation. Paste one contact per line:
+   Name | beauty/barber/auto/detailing | international number or social profile
+   CSV (comma, semicolon or tab) and quoted fields also work. Up to 500 contacts.
+   No messages are auto-sent. WhatsApp opens a prefilled chat; YOU press Send.
+   Use {name}, {niche}, {link} in any language. Do-not-contact disables actions.
+
+4. Storage and tracking:
+   - Contact list, draft, action history and opt-outs: this browser localStorage.
+   - Demo configurations, views and first/last open: SQLite on the server.
+   - Each outbound row has its own immutable random-keyed link. Contact numbers
+     and offer text are not sent to the short-link API. Names/niches ARE stored.
+   - Views count visible JS-loaded demo sessions, deduplicated per tab session.
+     Reloading a link in the same session does not inflate the counter.
+     It is NOT a message read receipt or a reliable unique-person metric.
+     Plain GET/HEAD requests and most link-preview bots do not count.
+     Sender preview links use ?inspect=1 and are not counted.
+     Stats refresh every 15 seconds while Outbound is visible.
+   - Export backup before clearing browser data. Restoring preserves link keys;
+     server creates or resolves the same links. No cross-device sync of contacts.
+
+5. Niches and demo isolation:
+   /d/... and legacy /?niche=... show localized EN/PL catalogs, PLN demo prices,
+   niche copy and imagery. Test appointments do NOT modify real bookings or
+   send Telegram messages. The normal root page without niche keeps CRM data.
+   Remote logo color sampling happens in the browser. If the image host denies
+   CORS or the image is inaccessible, the default niche palette is retained.
+   Manual design/theme switching overrides automatic sampling.
+
+6. Railway:
+   Use the included Procfile. Add a persistent volume mounted at /data and set
+   DATA_DIR=/data so SQLite short links and view counts survive redeployment.
+   IMPORTANT: when moving an existing install, back up its salon.db first and
+   copy it into the chosen DATA_DIR BEFORE running the new build. Never delete
+   the DB to upgrade. New tables are added automatically on startup.
+   Use your real public HTTPS domain when generating links, not localhost.
+   One running instance with SQLite; multi-instance deployments need Postgres
+   plus shared session/rate-limit storage. Existing admin sessions are in RAM
+   and require sign-in again after restart. Existing logo/avatar uploads in
+   static/uploads require separate persistent storage (unchanged from v4).
+
+7. Testing:
+   pip install -r requirements-dev.txt
+   python -m pytest -q
+   node tests/parser.test.js
+   Browser checks: install Chromium with python -m playwright install chromium;
+   on Linux also install browser system dependencies. Run uvicorn on port 8075
+   using a disposable DATA_DIR, then python tests/browser_checks.py.
+   The browser test NEVER opens or sends actual WhatsApp messages.
+
+8. Scope / before real customer-data production:
+   This release extends the v4 boilerplate; no software can promise zero errors.
+   New short-link creation/statistics APIs require admin authorization. All
+   imported text is escaped in the new UI, URLs validated, API writes atomic.
+   The inherited v4 phone-only client lookup is not identity verification: replace
+   it with OTP or signed management links before using real customer data. Also
+   harden inherited admin password storage/session policy and add regular backups.
+   Outbound should be used only for lawful, appropriate contacts; honor opt-outs.
+   External photos/fonts can be unavailable. Utility CSS is bundled locally;
+   the deployed application needs no Node/Vite/Webpack build or Tailwind CDN.

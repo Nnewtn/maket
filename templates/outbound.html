@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Outbound · Booking CRM</title><meta name="robots" content="noindex,nofollow"><link rel="stylesheet" href="/static/css/main.css"><link rel="stylesheet" href="/static/css/outbound.css"></head>
+<body class="outbound-page">
+<header class="ob-header"><a href="/admin" class="ob-back">← CRM</a><div><small>SALES WORKSPACE</small><h1>Personal demos. Real conversations.</h1></div><span id="save-status" role="status">Saved locally</span></header>
+<main class="ob-main">
+<section class="ob-notice">This tool prepares individual conversations — it never sends messages automatically. Use contacts you are entitled to approach, respect opt-outs, and do not use unsolicited bulk messaging. Page opens are an estimate, not proof that a person read your offer.</section>
+<section id="auth-warning" class="ob-error" hidden>Sign in to <a href="/admin">the CRM</a> first, then return here. Local drafts are preserved.</section>
+<div class="ob-grid">
+<section class="ob-panel"><div class="ob-heading"><span class="step">01</span><div><h2>Import your contacts</h2><p>One lead per line. Pipe, comma, semicolon or tab-separated CSV; quoted fields supported. Up to 500 leads.</p></div></div>
+<label for="import-text">Name | niche | international phone or social profile</label>
+<textarea id="import-text" rows="7" spellcheck="false" placeholder="Studio Luna | beauty | +48500100200&#10;North Barber | barber | @northbarber&#10;City Motors | auto | https://instagram.com/citymotors"></textarea>
+<div class="ob-actions"><button id="parse-btn" class="ob-primary">Parse contacts</button><button id="sample-btn" class="ob-secondary">Try fictional examples</button><label class="ob-check"><input id="replace-import" type="checkbox"> Replace current list</label></div><p id="import-status" role="status"></p><div id="import-errors" class="ob-error" hidden></div>
+</section>
+<section class="ob-panel"><div class="ob-heading"><span class="step">02</span><div><h2>Write your offer</h2><p>Your language, your tone. Variables are substituted per lead.</p></div></div>
+<label for="offer-template">Message template</label><textarea id="offer-template" rows="7"></textarea>
+<div class="ob-tags"><button data-insert="{name}">{name}</button><button data-insert="{niche}">{niche}</button><button data-insert="{link}">{link}</button></div>
+<p class="ob-muted">Per-lead links use niche-specific services, prices, imagery and copy. The preview form is a sandbox — it creates no real bookings.</p><p id="template-warning" class="ob-warning" hidden>Your template has no {link}. Add it to include the personalized demo.</p>
+</section></div>
+<section class="ob-panel"><div class="ob-heading"><span class="step">03</span><div><h2>Your outreach conveyor</h2><p>Open a chat, copy an offer, and return to see which demos were opened.</p></div></div>
+<div class="ob-metrics"><div><span id="total-count">0</span><small>Leads</small></div><div><span id="viewed-count">0</span><small>Demos opened</small></div><div><span id="prepared-count">0</span><small>Chat / copy actions</small></div></div>
+<div class="ob-toolbar"><input id="search" placeholder="Search name or contact" aria-label="Search leads"><select id="filter" aria-label="Filter leads"><option value="all">All leads</option><option value="unopened">No opens yet</option><option value="opened">Demo opened</option><option value="optout">Do not contact</option></select><button id="refresh-btn" class="ob-secondary">Refresh views</button><button id="export-btn" class="ob-secondary">Export backup</button><label class="ob-secondary ob-file">Restore backup<input id="restore-file" type="file" accept="application/json,.json" hidden></label></div>
+<p id="network-status" class="ob-muted" role="status"></p>
+<div class="ob-table-wrap"><table class="ob-table"><thead><tr><th>Business / contact</th><th>Niche</th><th>Personal demo</th><th>Page opens</th><th>Actions</th></tr></thead><tbody id="lead-rows"></tbody></table></div>
+<p id="empty-state" class="ob-empty">Import a few contacts to build your first personalized pipeline.</p>
+<footer class="ob-footer"><p>Your contact list and template stay in this browser. Server stores demo configurations and aggregate opens, not contact numbers. Export a backup before clearing browser data.</p><button id="clear-btn" class="ob-danger">Clear local workspace</button></footer>
+</section>
+</main><div id="ob-toast" role="status"></div><script src="/static/js/outreach-core.js"></script><script src="/static/js/outbound.js"></script></body></html>
