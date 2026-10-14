@@ -170,7 +170,11 @@
         brand-matched colors (auto-analyzed from the logo) and niche imagery — without touching your shared demo database.</p>
         <div class="grid md:grid-cols-2 gap-3">
           <input id="pv-name" class="field" placeholder="Salon name, e.g. BarberHouse Warsaw" />
-          <input id="pv-logo" class="field" placeholder="Logo image URL (https://…)" />
+          <div class="flex items-center gap-2">
+            <img id="pv-logo-thumb" class="h-11 w-11 rounded-lg object-contain border brd hidden" alt="" />
+            <input id="pv-logo" class="field flex-1" placeholder="Logo: paste URL or press Ctrl+V with an image" />
+            <label class="border brd rounded-lg px-3 py-2 text-xs cursor-pointer whitespace-nowrap">Upload<input id="pv-logo-file" type="file" accept="image/*" hidden /></label>
+          </div>
           <select id="pv-niche" class="field">
             <option value="beauty">Niche: Beauty salon</option>
             <option value="barber">Niche: Barbershop</option>
@@ -229,7 +233,7 @@
           <img id="logo-preview" class="h-14 w-14 rounded-full object-cover border brd hidden" alt="" />
           <input id="s-logo" type="file" accept="image/*" class="field" />
         </div>
-        <p class="dim text-xs mb-4">Pick a photo — the built-in cropper frames it into a perfect circle, and the server normalizes it to a clean 512px PNG automatically.</p>
+        <p class="dim text-xs mb-4">Pick a photo or press Ctrl+V to paste one from the clipboard — the built-in cropper frames it into a perfect circle, and the server normalizes it to a clean 512px PNG automatically.</p>
         <button onclick="saveSettings()" class="btn-accent w-full py-2.5 rounded-xl font-semibold">Save settings</button>
       </div>
 
@@ -586,14 +590,20 @@ async function changePwd() {
 /* ---------- logo cropper ---------- */
 let cropImg = null, cropZoom = 1, cropX = 0, cropY = 0, dragging = false, lastP = null;
 
-$("#s-logo").addEventListener("change", (e) => {
-  const f = e.target.files[0];
+$("#s-logo").addEventListener("change", (e) => openCropper(e.target.files[0]));
+function openCropper(f) {
   if (!f) return;
   const img = new Image();
   img.onload = () => { cropImg = img; cropZoom = 1; cropX = 0; cropY = 0;
     $("#crop-zoom").value = 1; $("#crop-modal").classList.remove("hidden"); drawCrop(); };
   img.onerror = () => toast("Could not read this image");
   img.src = URL.createObjectURL(f);
+}
+// Ctrl+V anywhere in Settings opens the cropper with the pasted image
+document.addEventListener("paste", (e) => {
+  if ($("#sec-settings").classList.contains("hidden")) return;
+  const f = Outreach.imageFromClipboard(e);
+  if (f) { e.preventDefault(); openCropper(f); }
 });
 function closeCropper() { $("#crop-modal").classList.add("hidden"); $("#s-logo").value = ""; cropImg = null; }
 

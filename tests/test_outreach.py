@@ -100,3 +100,27 @@ def test_static_and_outbound(client):
         assert client.get(path).status_code==200
     admin=client.get('/admin').text
     assert 'Generate link</button>' not in admin and 'Copy Link' in admin and 'preview-links.js' in admin
+
+
+def _png():
+    import io
+    from PIL import Image
+    b = io.BytesIO(); Image.new("RGBA", (40, 20), (200, 30, 30, 255)).save(b, "PNG"); return b.getvalue()
+
+def test_demo_logo_upload_requires_login(client):
+    assert client.post('/api/admin/demo-logo', files={'file': ('a.png', _png(), 'image/png')}).status_code == 401
+
+def test_pasted_logo_upload_and_use_in_link(client, headers):
+    r = client.post('/api/admin/demo-logo', headers=headers, files={'file': ('clip.png', _png(), 'image/png')})
+    assert r.status_code == 200
+    logo = r.json()['logo']
+    assert logo.startswith('/static/uploads/demo_')
+    link = client.post('/api/admin/demo-links', headers=headers, json={'brand': 'Luna', 'logo': logo})
+    assert link.status_code == 200
+    assert client.get(logo).status_code == 200
+    assert logo in client.get(link.json()['path']).text
+
+def test_demo_logo_rejects_non_image_and_foreign_paths(client, headers):
+    assert client.post('/api/admin/demo-logo', headers=headers, files={'file': ('x.png', b'nope', 'image/png')}).status_code == 400
+    for bad in ['/static/uploads/../../etc/passwd', '/other/x.png', '//evil.com/x.png']:
+        assert client.post('/api/admin/demo-links', headers=headers, json={'brand': 'x', 'logo': bad}).status_code == 422

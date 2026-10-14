@@ -21,7 +21,7 @@ const isPreview = !!window.__DEMO_CONFIG__ || ['beauty','barber','auto','detaili
 let manualTheme=false;
 function applyPreviewParams() {
   state.previewName=String(previewConfig.brand||'').slice(0,120);
-  state.previewLogo=/^https?:\/\//.test(previewConfig.logo||'')?previewConfig.logo:'';
+  state.previewLogo=/^(https?:\/\/|\/static\/uploads\/)/.test(previewConfig.logo||'')?previewConfig.logo:'';
   if(isPreview){
     NicheContent.set(previewConfig.niche||'beauty');
     const root=document.documentElement,preset=NicheContent.preset;

@@ -1,6 +1,7 @@
 """Short-link storage and privacy-conscious page-view telemetry. No message sending."""
 import hashlib
 import json
+import re
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Literal
@@ -45,6 +46,8 @@ class DemoConfig(BaseModel):
     def safe_logo(cls, value):
         if not value:
             return value
+        if re.fullmatch(r"/static/uploads/[A-Za-z0-9_-]+\.png", value):
+            return value  # logo pasted/uploaded through the admin (same origin)
         parsed = urlsplit(value)
         if parsed.scheme not in ("http", "https") or not parsed.hostname or parsed.username or parsed.password:
             raise ValueError("Logo must be a public http(s) image URL without credentials")

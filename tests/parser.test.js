@@ -15,3 +15,13 @@ assert.equal(O.wa('@luna','Hello'),'');
 assert.equal(O.escape('<img onerror="x">'),'&lt;img onerror=&quot;x&quot;&gt;');
 assert.equal(O.parse('\uFEFFLuna | beauty | @luna').items.length,1);
 console.log('13 parser, template, escaping and WhatsApp assertions passed.');
+{
+  const r=O.parse('Luna | beauty | @luna | https://example.com/logo.png');
+  assert.equal(r.items[0].logo,'https://example.com/logo.png');
+  assert.equal(O.parse('Luna | beauty | @luna | javascript:alert(1)').errors.length,1);
+  assert.equal(O.parse('Luna | beauty | @luna').items[0].logo,'');
+  assert.equal(O.matchLead('Studio Luna.png',[{name:'Studio Luna'},{name:'Other'}]).name,'Studio Luna');
+  assert.equal(O.matchLead('north-barber (2).jpg',[{name:'North Barber'}]).name,'North Barber');
+  assert.equal(O.matchLead('random.png',[{name:'North Barber'}]),null);
+  console.log('logo parsing and filename matching passed.');
+}

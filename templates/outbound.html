@@ -7,7 +7,7 @@
 <section id="auth-warning" class="ob-error" hidden>Sign in to <a href="/admin">the CRM</a> first, then return here. Local drafts are preserved.</section>
 <div class="ob-grid">
 <section class="ob-panel"><div class="ob-heading"><span class="step">01</span><div><h2>Import your contacts</h2><p>One lead per line. Pipe, comma, semicolon or tab-separated CSV; quoted fields supported. Up to 500 leads.</p></div></div>
-<label for="import-text">Name | niche | international phone or social profile</label>
+<label for="import-text">Name | niche | international phone or social profile | (optional) logo URL</label>
 <textarea id="import-text" rows="7" spellcheck="false" placeholder="Studio Luna | beauty | +48500100200&#10;North Barber | barber | @northbarber&#10;City Motors | auto | https://instagram.com/citymotors"></textarea>
 <div class="ob-actions"><button id="parse-btn" class="ob-primary">Parse contacts</button><button id="sample-btn" class="ob-secondary">Try fictional examples</button><label class="ob-check"><input id="replace-import" type="checkbox"> Replace current list</label></div><p id="import-status" role="status"></p><div id="import-errors" class="ob-error" hidden></div>
 </section>
@@ -18,6 +18,7 @@
 </section></div>
 <section class="ob-panel"><div class="ob-heading"><span class="step">03</span><div><h2>Your outreach conveyor</h2><p>Open a chat, copy an offer, and return to see which demos were opened.</p></div></div>
 <div class="ob-metrics"><div><span id="total-count">0</span><small>Leads</small></div><div><span id="viewed-count">0</span><small>Demos opened</small></div><div><span id="prepared-count">0</span><small>Chat / copy actions</small></div></div>
+<div id="logo-drop" class="ob-drop"><strong>Logos in bulk</strong> — drop many image files here (named like the business, e.g. <code>Studio Luna.png</code>) and they are matched to leads automatically. Or add a 4th column with a logo URL when importing. For one-by-one: click a logo box in the table, then Ctrl+V — the next empty row is selected automatically.<label class="ob-secondary ob-file">Choose files<input id="logo-bulk-file" type="file" accept="image/*" multiple hidden></label><span id="logo-bulk-status" role="status"></span></div>
 <div class="ob-toolbar"><input id="search" placeholder="Search name or contact" aria-label="Search leads"><select id="filter" aria-label="Filter leads"><option value="all">All leads</option><option value="unopened">No opens yet</option><option value="opened">Demo opened</option><option value="optout">Do not contact</option></select><button id="refresh-btn" class="ob-secondary">Refresh views</button><button id="export-btn" class="ob-secondary">Export backup</button><label class="ob-secondary ob-file">Restore backup<input id="restore-file" type="file" accept="application/json,.json" hidden></label></div>
 <p id="network-status" class="ob-muted" role="status"></p>
 <div class="ob-table-wrap"><table class="ob-table"><thead><tr><th>Business / contact</th><th>Niche</th><th>Personal demo</th><th>Page opens</th><th>Actions</th></tr></thead><tbody id="lead-rows"></tbody></table></div>

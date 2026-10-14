@@ -15,6 +15,15 @@ BOOKING CRM v5 — RUN AND UPGRADE
    No messages are auto-sent. WhatsApp opens a prefilled chat; YOU press Send.
    Use {name}, {niche}, {link} in any language. Do-not-contact disables actions.
 
+   LOGOS (new): in the preview builder press Ctrl+V with an image in the clipboard
+   (screenshot, "Copy image" from a website/Instagram), or drag a file, or use Upload.
+   In Settings, Ctrl+V opens the cropper with the pasted image.
+   In Outbound: (a) drop many image files on the Logos box - they are matched to
+   leads by file name (e.g. "Studio Luna.png"); (b) add a 4th column with a logo URL
+   to the import; (c) click a logo box in a row and press Ctrl+V (image or image URL) -
+   the next lead without a logo is selected automatically.
+   Adding a logo to a lead creates a NEW link (links are immutable); old links still work.
+
 4. Storage and tracking:
    - Contact list, draft, action history and opt-outs: this browser localStorage.
    - Demo configurations, views and first/last open: SQLite on the server.

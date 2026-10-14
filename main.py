@@ -488,6 +488,16 @@ async def upload_logo(file: UploadFile = File(...), db: Session = Depends(get_db
     return {"logo_url": url}
 
 
+@app.post("/api/admin/demo-logo")
+async def upload_demo_logo(file: UploadFile = File(...), _: bool = Depends(require_admin)):
+    """Upload a logo for a personalized demo link (pasted / dropped in the admin).
+    Does NOT touch the business's own logo_url setting."""
+    data = await file.read()
+    if not data:
+        raise HTTPException(400, "Empty file")
+    return {"logo": save_image_square(data, "demo")}
+
+
 @app.post("/api/admin/seed-sample")
 def seed_sample(db: Session = Depends(get_db), _: bool = Depends(require_admin)):
     """Load realistic demo bookings/waitlist for sales presentations."""

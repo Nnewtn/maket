@@ -23,8 +23,28 @@
     status.textContent='Saving your short link…';
     timer=setTimeout(()=>persist(config,version),180);
   }
+  // Logo: Ctrl+V / drag-and-drop / file picker -> uploaded, field filled with the stored path
+  const thumb=document.getElementById('pv-logo-thumb');
+  function showThumb(){const v=input('logo').value.trim();if(v&&Outreach.validLogo(v)){thumb.src=v;thumb.referrerPolicy='no-referrer';thumb.classList.remove('hidden');}else thumb.classList.add('hidden');}
+  async function setLogoFile(file){
+    status.textContent='Uploading logo…';
+    try{input('logo').value=await Outreach.uploadLogo(file);showThumb();changed();}
+    catch(e){status.textContent=e.message;}
+  }
+  input('logo').addEventListener('paste',e=>{const f=Outreach.imageFromClipboard(e);if(f){e.preventDefault();setLogoFile(f);}});
+  // pasting anywhere inside this section (outside other text fields) also works
+  document.addEventListener('paste',e=>{
+    const sec=document.getElementById('sec-preview');if(!sec||sec.classList.contains('hidden')||e.target===input('logo'))return;
+    if(['INPUT','TEXTAREA','SELECT'].includes(e.target.tagName))return;
+    const f=Outreach.imageFromClipboard(e);if(f){e.preventDefault();setLogoFile(f);}
+  });
+  input('logo').addEventListener('dragover',e=>e.preventDefault());
+  input('logo').addEventListener('drop',e=>{const f=[...(e.dataTransfer?.files||[])].find(x=>x.type.startsWith('image/'));if(f){e.preventDefault();setLogoFile(f);}});
+  document.getElementById('pv-logo-file').addEventListener('change',e=>{const f=e.target.files[0];e.target.value='';if(f)setLogoFile(f);});
+  input('logo').addEventListener('input',showThumb);
   const draft=Outreach.load('preview-builder-v5',null);
   if(draft){for(const field of fields){if(field==='demo')input(field).checked=draft.demo??true;else input(field).value=draft[field==='name'?'brand':field]??'';}}
+  showThumb();
   fields.forEach(field=>{input(field).addEventListener('input',changed);input(field).addEventListener('change',changed);});
   copyBtn.addEventListener('click',async()=>{
     if(!readyPath)return;
