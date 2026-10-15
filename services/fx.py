@@ -1,40 +1,51 @@
-"""Currency conversion — live ECB rates via frankfurter.app (free, no API key),
-with a 12h in-memory cache and static fallback so the site never breaks offline."""
+"""Frankfurter.app FX rates with 12-hour cache and offline fallback."""
+from __future__ import annotations
+import json
 import time
-
+import logging
 import httpx
 
-SUPPORTED = ("PLN", "USD", "EUR")
-SYMBOLS = {"PLN": "zł", "USD": "$", "EUR": "€"}
+log = logging.getLogger("fx")
 
-FALLBACK_PLN = {"PLN": 1.0, "USD": 0.25, "EUR": 0.23}
-
-_cache = {"ts": 0.0, "base": None, "rates": None}
-CACHE_TTL = 60 * 60 * 12
-
-
-def _fallback(base: str) -> dict:
-    per_pln = dict(FALLBACK_PLN)
-    base_in_pln = 1.0 / per_pln[base]
-    return {k: round(v * base_in_pln, 6) for k, v in per_pln.items()}
+_CACHE_FILE = None  # disabled; memory only
+_FALLBACK = {
+    "base": "PLN",
+    "rates": {"PLN": 1.0, "USD": 0.25, "EUR": 0.23},
+    "date": "fallback",
+    "ts": 0,
+}
+_mem_cache = dict(_FALLBACK)
+_TTL = 12 * 3600
 
 
-async def get_rates(base: str = "PLN") -> dict:
-    if base not in SUPPORTED:
-        base = "PLN"
+def get_rates(base: str = "PLN") -> dict:
+    """Return rates + base + date. Memory cache, 12 h."""
     now = time.time()
-    if _cache["rates"] and _cache["base"] == base and now - _cache["ts"] < CACHE_TTL:
-        return {"base": base, "rates": _cache["rates"], "live": True}
+    if _mem_cache.get("base") == base and (now - _mem_cache.get("ts", 0)) < _TTL:
+        return _mem_cache
     try:
-        async with httpx.AsyncClient(timeout=8) as client:
-            resp = await client.get(
-                "https://api.frankfurter.app/latest",
-                params={"from": base, "to": ",".join(SUPPORTED)},
-            )
-            data = resp.json()
-            rates = {c: float(data["rates"].get(c, 1.0)) for c in SUPPORTED}
-            rates[base] = 1.0
-            _cache.update(ts=now, base=base, rates=rates)
-            return {"base": base, "rates": rates, "live": True}
-    except Exception:
-        return {"base": base, "rates": _fallback(base), "live": False}
+        url = f"https://api.frankfurter.app/latest?from={base}"
+        with httpx.Client(timeout=6.0) as cx:
+            r = cx.get(url)
+        if r.status_code == 200:
+            data = r.json()
+            rates = data.get("rates", {})
+            for need in ("PLN", "USD", "EUR"):
+                rates.setdefault(need, _FALLBACK["rates"][need])
+            _mem_cache.update({"base": base, "rates": rates, "date": data.get("date", ""), "ts": now})
+            return _mem_cache
+    except Exception as e:
+        log.warning("fx fetch failed: %s", e)
+    _mem_cache.update({**_FALLBACK, "ts": now})
+    return _mem_cache
+
+
+def convert(amount: float, from_ccy: str, to_ccy: str) -> float:
+    if from_ccy == to_ccy:
+        return amount
+    rates = get_rates(from_ccy)["rates"]
+    if to_ccy not in rates or from_ccy not in rates:
+        return amount
+    # amount in from_ccy → PLN → to_ccy
+    pln = amount / rates[from_ccy]
+    return round(pln * rates[to_ccy], 2)

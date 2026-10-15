@@ -1,259 +1,228 @@
-"""
-Database layer: SQLite via SQLAlchemy 2.0
-Models: Service, Staff, Booking, Waitlist, Setting.
-Hardened: WAL journal mode + busy_timeout, automatic column migration,
-plus a one-click sample-data generator for sales demos.
-"""
+"""SQLite/SQLAlchemy 2.0 layer with WAL, busy_timeout, auto-migration."""
+from __future__ import annotations
 import os
-import random
-from datetime import datetime, timedelta
+from datetime import datetime
+from pathlib import Path
+from sqlalchemy import (
+    create_engine, Column, Integer, String, Float, Boolean,
+    DateTime, ForeignKey, Text, Index, UniqueConstraint,
+)
+from sqlalchemy.orm import declarative_base, sessionmaker, relationship
+from sqlalchemy import event
 
-from sqlalchemy import (Boolean, Column, DateTime, Float, ForeignKey, Integer,
-                        String, Text, create_engine, event, text)
-from sqlalchemy.orm import declarative_base, relationship, sessionmaker
-
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DATA_DIR = os.path.abspath(os.environ.get("DATA_DIR", BASE_DIR))
-os.makedirs(DATA_DIR, exist_ok=True)
-DB_PATH = os.path.join(DATA_DIR, "salon.db")
+DATA_DIR = Path(os.environ.get("DATA_DIR", ".")).resolve()
+DATA_DIR.mkdir(parents=True, exist_ok=True)
+DB_PATH = DATA_DIR / "salon.db"
 
 engine = create_engine(
     f"sqlite:///{DB_PATH}",
-    connect_args={"check_same_thread": False},
+    connect_args={
+        "check_same_thread": False,
+        "timeout": 30,
+    },
     pool_pre_ping=True,
 )
 
-
 @event.listens_for(engine, "connect")
-def _sqlite_tuning(dbapi_conn, _):
+def _set_sqlite_pragmas(dbapi_conn, _):
     cur = dbapi_conn.cursor()
     cur.execute("PRAGMA journal_mode=WAL")
     cur.execute("PRAGMA busy_timeout=5000")
     cur.execute("PRAGMA foreign_keys=ON")
+    cur.execute("PRAGMA synchronous=NORMAL")
     cur.close()
 
-
-SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+SessionLocal = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
 Base = declarative_base()
 
 
 class Service(Base):
     __tablename__ = "services"
-
     id = Column(Integer, primary_key=True)
     name = Column(String(120), nullable=False)
-    description = Column(String(300), default="")
+    description = Column(String(400), default="")
     price = Column(Float, nullable=False, default=0.0)
-    duration_min = Column(Integer, nullable=False, default=60)
-    active = Column(Boolean, default=True)
-
-    bookings = relationship("Booking", back_populates="service")
+    duration_min = Column(Integer, nullable=False, default=30)
+    niche = Column(String(40), default="all")
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
 
 
 class Staff(Base):
     __tablename__ = "staff"
-
     id = Column(Integer, primary_key=True)
     name = Column(String(120), nullable=False)
-    role = Column(String(80), default="")
-    avatar_url = Column(String(200), default="")
-    telegram_chat_id = Column(String(40), default="")
-    active = Column(Boolean, default=True)
+    role = Column(String(120), default="Master")
+    bio = Column(String(400), default="")
+    avatar = Column(String(400), default="")
+    work_hours = Column(String(120), default="09:00-20:00")
+    telegram_chat_id = Column(String(120), default="")
+    telegram_handle = Column(String(120), default="")
+    is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=datetime.utcnow)
-
-    bookings = relationship("Booking", back_populates="staff")
 
 
 class Booking(Base):
     __tablename__ = "bookings"
-
     id = Column(Integer, primary_key=True)
     client_name = Column(String(120), nullable=False)
-    phone = Column(String(40), nullable=False)
-    contact_method = Column(String(20), default="Call")
-    contact_handle = Column(String(80), default="")
-    service_id = Column(Integer, ForeignKey("services.id"), nullable=False)
+    phone = Column(String(40), nullable=False, index=True)
+    contact_method = Column(String(20), default="call")  # call/wa/tg
+    contact_value = Column(String(120), default="")
+    service_id = Column(Integer, ForeignKey("services.id"))
     staff_id = Column(Integer, ForeignKey("staff.id"), nullable=True)
-    start_time = Column(DateTime, nullable=False)
-    end_time = Column(DateTime, nullable=False)
-    status = Column(String(20), default="New")
-    created_at = Column(DateTime, default=datetime.utcnow)
-
-    service = relationship("Service", back_populates="bookings")
-    staff = relationship("Staff", back_populates="bookings")
-
-
-class Waitlist(Base):
-    __tablename__ = "waitlist"
-
-    id = Column(Integer, primary_key=True)
-    client_name = Column(String(120), nullable=False)
-    phone = Column(String(40), nullable=False)
-    contact_method = Column(String(20), default="Call")
-    contact_handle = Column(String(80), default="")
-    service_id = Column(Integer, ForeignKey("services.id"), nullable=True)
-    staff_id = Column(Integer, ForeignKey("staff.id"), nullable=True)
-    date_pref = Column(String(10), default="")
-    active = Column(Boolean, default=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    starts_at = Column(DateTime, nullable=False, index=True)
+    duration_min = Column(Integer, nullable=False)
+    price = Column(Float, default=0.0)
+    currency = Column(String(8), default="PLN")
+    status = Column(String(20), default="New", index=True)  # New/Confirmed/Completed/Cancelled
+    notes = Column(String(600), default="")
+    is_demo = Column(Boolean, default=False)
+    created_at = Column(DateTime, default=datetime.utcnow, index=True)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     service = relationship("Service")
     staff = relationship("Staff")
 
 
+class Waitlist(Base):
+    __tablename__ = "waitlist"
+    id = Column(Integer, primary_key=True)
+    client_name = Column(String(120), nullable=False)
+    phone = Column(String(40), nullable=False, index=True)
+    service_id = Column(Integer, ForeignKey("services.id"), nullable=True)
+    desired_date = Column(String(40), default="")
+    status = Column(String(20), default="Open")
+    notes = Column(String(400), default="")
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
 class Setting(Base):
     __tablename__ = "settings"
-
-    key = Column(String(60), primary_key=True)
+    key = Column(String(80), primary_key=True)
     value = Column(Text, default="")
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class DemoLink(Base):
+    __tablename__ = "demo_links"
+    code = Column(String(40), primary_key=True)
+    config_json = Column(Text, nullable=False)
+    views = Column(Integer, default=0)
+    first_view_at = Column(DateTime, nullable=True)
+    last_view_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class OutboundLead(Base):
+    __tablename__ = "outbound_leads"
+    id = Column(Integer, primary_key=True)
+    name = Column(String(120), nullable=False)
+    niche = Column(String(40), nullable=False)
+    contact = Column(String(200), nullable=False)
+    contact_kind = Column(String(20), default="phone")
+    status = Column(String(20), default="New", index=True)
+    notes = Column(String(600), default="")
+    do_not_contact = Column(Boolean, default=False)
+    created_at = Column(DateTime, default=datetime.utcnow, index=True)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, index=True)
+
+
+class OutboundTemplate(Base):
+    __tablename__ = "outbound_templates"
+    id = Column(Integer, primary_key=True)
+    name = Column(String(120), default="Default")
+    body = Column(Text, default="")
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class OutboundSend(Base):
+    __tablename__ = "outbound_sends"
+    id = Column(Integer, primary_key=True)
+    lead_id = Column(Integer, ForeignKey("outbound_leads.id", ondelete="CASCADE"), index=True)
+    template_name = Column(String(120), default="")
+    rendered = Column(Text, default="")
+    channel = Column(String(20), default="wa")
+    created_at = Column(DateTime, default=datetime.utcnow)
 
 
 DEFAULT_SETTINGS = {
-    "company_name": "Glamour Studio",
-    "description": "Premium beauty & barber services. Book online in 30 seconds — no phone calls, no waiting.",
-    "opening_hours": "09:00-20:00",
-    "slot_step": "30",
-    "admin_password": "admin123",
-    "telegram_token": "",
+    "site_name": "Luxe Barber",
+    "site_description": "Premium grooming studio in the heart of the city. Walk in, look sharp.",
+    "logo_path": "",
+    "telegram_bot_token": "",
     "telegram_chat_id": "",
-    "logo_url": "",
-    "currency": "PLN",
+    "default_currency": "PLN",
+    "default_language": "en",
+    "working_hours": "09:00-20:00",
+    "slot_step_min": 30,
+    "outbound_password_hash": "",  # set on first run
 }
 
 SEED_SERVICES = [
-    ("Men's Haircut", "Classic cut, wash & styling", 120.0, 45),
-    ("Beard Trim & Shape", "Hot towel, razor finish", 80.0, 30),
-    ("Women's Cut & Blowout", "Cut, wash & professional blowout", 180.0, 60),
-    ("Full Coloring", "Premium dye, toner & treatment", 350.0, 120),
-    ("Manicure", "Shape, cuticle care & polish", 140.0, 60),
+    ("Men's Haircut", "Classic or modern cut, wash, and style.", 80.0, 45, "barber"),
+    ("Beard Trim & Shape", "Precision beard sculpt with hot towel.", 50.0, 30, "barber"),
+    ("Hot Shave", "Traditional straight-razor shave ritual.", 70.0, 45, "barber"),
+    ("Kids Cut", "Friendly trim for ages 5–12.", 40.0, 30, "barber"),
+    ("Hair Wash & Style", "Wash, blow-dry and finish.", 35.0, 20, "beauty"),
 ]
 
 SEED_STAFF = [
-    ("Alex Kowalski", "Master Barber"),
-    ("Marta Nowak", "Colorist & Stylist"),
+    ("Alex Kowalski", "Senior Barber", "10 years of experience, classic techniques.", "09:00-20:00"),
+    ("Marta Nowak", "Top Stylist", "Color specialist and modern cuts.", "10:00-19:00"),
+    ("Piotr Wiśniewski", "Beard Master", "Beard shaping and hot shaves.", "11:00-20:00"),
 ]
 
-FAKE_CLIENTS = [
-    ("Kuba Wojciechowski", "+48 512 340 901"),
-    ("Anna Zielińska", "+48 601 442 780"),
-    ("Piotr Lewandowski", "+48 733 118 205"),
-    ("Ewa Kamińska", "+48 509 227 114"),
-    ("Michał Dąbrowski", "+48 665 903 441"),
-    ("Ola Wiśniewska", "+48 788 410 662"),
-    ("Tomasz Nowak", "+48 534 871 209"),
-    ("Kasia Mazur", "+48 692 115 348"),
-    ("Bartek Krawczyk", "+48 517 664 930"),
-    ("Magda Piotrowska", "+48 785 209 416"),
-]
-CONTACTS = [("Call", ""), ("WhatsApp", ""), ("Telegram", "@client_tg")]
 
-
-def seed_fake_data(db) -> dict:
-    """Populate realistic demo data: bookings across past 14 days + next 7,
-    a couple of waitlist entries. Idempotent-ish: skips if already seeded."""
-    if db.query(Booking).count() >= 10:
-        return {"ok": False, "detail": "Sample data already loaded"}
-
-    services = db.query(Service).filter(Service.active.is_(True)).all()
-    staff = db.query(Staff).filter(Staff.active.is_(True)).all()
-    if not services or not staff:
-        return {"ok": False, "detail": "No services or staff to attach bookings to"}
-
-    rng = random.Random(42)
-    now = datetime.now()
-    today0 = now.replace(hour=0, minute=0, second=0, microsecond=0)
-    count = 0
-    for i in range(40):
-        day_off = i - 28                      # -28 … +11 days
-        day = today0 + timedelta(days=day_off)
-        for slot_h in rng.sample(range(9, 19), rng.choice([1, 1, 2])):
-            svc = rng.choice(services)
-            master = rng.choice(staff)
-            start = day.replace(hour=slot_h, minute=rng.choice([0, 30]))
-            name, phone = rng.choice(FAKE_CLIENTS)
-            method, handle = rng.choice(CONTACTS)
-            if day_off < 0:
-                status = rng.choice(["Completed", "Completed", "Completed", "Cancelled"])
-            elif day_off == 0:
-                status = rng.choice(["New", "Confirmed", "Confirmed"])
-            else:
-                status = rng.choice(["New", "Confirmed"])
-            db.add(Booking(
-                client_name=name, phone=phone,
-                contact_method=method, contact_handle=handle,
-                service_id=svc.id, staff_id=master.id,
-                start_time=start, end_time=start + timedelta(minutes=svc.duration_min),
-                status=status,
-                created_at=start - timedelta(days=rng.randint(1, 6)),
-            ))
-            count += 1
-
-    for name, phone in FAKE_CLIENTS[:3]:
-        db.add(Waitlist(client_name=name, phone=phone,
-                        contact_method="WhatsApp",
-                        service_id=services[0].id, staff_id=None,
-                        date_pref=(today0 + timedelta(days=2)).strftime("%Y-%m-%d")))
-    db.commit()
-    return {"ok": True, "bookings": count}
-
-
-def get_setting(db, key: str, default: str = "") -> str:
-    try:
-        row = db.query(Setting).filter(Setting.key == key).first()
-        return row.value if row else DEFAULT_SETTINGS.get(key, default)
-    except Exception:
-        return DEFAULT_SETTINGS.get(key, default)
-
-
-def set_setting(db, key: str, value: str):
-    row = db.query(Setting).filter(Setting.key == key).first()
-    if row:
-        row.value = value
-    else:
-        db.add(Setting(key=key, value=value))
-    db.commit()
-
-
-def _ensure_columns():
-    wanted = {
-        "bookings": {
-            "staff_id": "INTEGER",
-            "contact_method": "VARCHAR(20) DEFAULT 'Call'",
-            "contact_handle": "VARCHAR(80) DEFAULT ''",
-        },
-        "staff": {
-            "avatar_url": "VARCHAR(200) DEFAULT ''",
-        },
-    }
-    with engine.connect() as conn:
-        for table, cols in wanted.items():
-            try:
-                existing = {r[1] for r in conn.execute(text(f"PRAGMA table_info({table})"))}
-                for col, ddl in cols.items():
-                    if col not in existing:
-                        conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {col} {ddl}"))
-            except Exception:
-                pass
-        conn.commit()
-
-
-def init_db():
+def init_db() -> None:
     Base.metadata.create_all(engine)
     _ensure_columns()
-    db = SessionLocal()
-    try:
-        for k, v in DEFAULT_SETTINGS.items():
-            if not db.query(Setting).filter(Setting.key == k).first():
-                db.add(Setting(key=k, value=v))
-        if db.query(Service).count() == 0:
-            for name, desc, price, dur in SEED_SERVICES:
-                db.add(Service(name=name, description=desc, price=price, duration_min=dur))
-        if db.query(Staff).count() == 0:
-            for name, role in SEED_STAFF:
-                db.add(Staff(name=name, role=role))
-        db.commit()
-    except Exception:
-        db.rollback()
-        raise
-    finally:
-        db.close()
+    with SessionLocal() as s:
+        if not s.query(Setting).count():
+            for k, v in DEFAULT_SETTINGS.items():
+                s.add(Setting(key=k, value=v))
+        if not s.query(Service).count():
+            for n, d, p, dur, niche in SEED_SERVICES:
+                s.add(Service(name=n, description=d, price=p, duration_min=dur, niche=niche))
+        if not s.query(Staff).count():
+            for n, role, bio, hours in SEED_STAFF:
+                s.add(Staff(name=n, role=role, bio=bio, work_hours=hours))
+        if not s.query(OutboundTemplate).count():
+            s.add(OutboundTemplate(
+                name="Default",
+                body="Hi {name}! I built a quick personalized preview for your {niche} business: {link}",
+            ))
+        s.commit()
+
+
+def _ensure_columns() -> None:
+    """Add columns when migrating from older DBs (idempotent)."""
+    expected = {
+        "bookings": {
+            "contact_method": "VARCHAR(20) DEFAULT 'call'",
+            "contact_value": "VARCHAR(120) DEFAULT ''",
+            "currency": "VARCHAR(8) DEFAULT 'PLN'",
+            "is_demo": "BOOLEAN DEFAULT 0",
+            "updated_at": "TIMESTAMP",
+        },
+        "settings": {"updated_at": "TIMESTAMP"},
+        "outbound_leads": {
+            "do_not_contact": "BOOLEAN DEFAULT 0",
+            "updated_at": "TIMESTAMP",
+            "contact_kind": "VARCHAR(20) DEFAULT 'phone'",
+        },
+        "outbound_templates": {"updated_at": "TIMESTAMP"},
+    }
+    with engine.begin() as conn:
+        for table, cols in expected.items():
+            try:
+                res = conn.exec_driver_sql(f"PRAGMA table_info({table})")
+                existing = {row[1] for row in res.fetchall()}
+            except Exception:
+                continue
+            for col, decl in cols.items():
+                if col not in existing:
+                    try:
+                        conn.exec_driver_sql(f"ALTER TABLE {table} ADD COLUMN {col} {decl}")
+                    except Exception:
+                        pass

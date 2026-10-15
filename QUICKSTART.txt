@@ -1,79 +1,79 @@
-BOOKING CRM v5 — RUN AND UPGRADE
+BOOKING CRM v7 — Python 3.11+ recommended
 
-1. Python 3.11+ recommended.
-   pip install -r requirements.txt
-   uvicorn main:app --reload
+INSTALL
+python -m pip install -r requirements.txt
+uvicorn main:app --host 0.0.0.0 --port 8000
 
-2. Visit /admin, initial password admin123 (change before making the site public).
-   Preview links: enter a name, choose a niche, optionally logo/layout/theme.
-   The short link auto-saves after a brief typing pause. Copy Link is enabled
-   only after the link exists on the server. Editing never mutates an older link.
+Defaults: /admin admin123; /admin/outbound 123123. Change production passwords!
+Configure ADMIN_PASSWORD, OUTBOUND_PASSWORD, SESSION_SECRET, BASE_URL and DATA_DIR
+as environment variables. .env.example is a template, NOT automatically loaded;
+uvicorn --env-file .env may be used if python-dotenv is installed.
 
-3. Visit /admin/outbound from the CRM navigation. Paste one contact per line:
-   Name | beauty/barber/auto/detailing | international number or social profile
-   CSV (comma, semicolon or tab) and quoted fields also work. Up to 500 contacts.
-   No messages are auto-sent. WhatsApp opens a prefilled chat; YOU press Send.
-   Use {name}, {niche}, {link} in any language. Do-not-contact disables actions.
+UPGRADE FROM v6
+Back up salon.db (use SQLite backup API or stop the server before copying DB/WAL).
+Use the SAME existing DATA_DIR; do not delete or replace the database.
+New tables and new settings are created on startup. Existing rows are preserved.
+Keep an existing SESSION_SECRET; otherwise a private persistent key is created in
+DATA_DIR/.session-secret. Keep this file with the DB to retain review-link validity.
+Use a persistent volume for DATA_DIR and keep uploads on persistent storage too.
+For container deployments mount static/uploads or persist that directory separately.
+Set a real HTTPS BASE_URL for CORS. Share the actual public domain, not localhost.
 
-   LOGOS (new): in the preview builder press Ctrl+V with an image in the clipboard
-   (screenshot, "Copy image" from a website/Instagram), or drag a file, or use Upload.
-   In Settings, Ctrl+V opens the cropper with the pasted image.
-   In Outbound: (a) drop many image files on the Logos box - they are matched to
-   leads by file name (e.g. "Studio Luna.png"); (b) add a 4th column with a logo URL
-   to the import; (c) click a logo box in a row and press Ctrl+V (image or image URL) -
-   the next lead without a logo is selected automatically.
-   Adding a logo to a lead creates a NEW link (links are immutable); old links still work.
+NEW FLOWS
+1. Set business niche in Settings. Configure actual services/prices/durations.
+   Real quiz quotes use active services in that niche, not demo service prices.
+   Car goals are mapped by name when possible, otherwise the available catalog.
+   Add-on tariffs live in growth.py / ADDONS (PLN); each has a real 20% bundle
+   discount and extra duration. Size multipliers are defined in quote_package.
+   Quotes are signed and expire after 30 minutes. Client-supplied price is ignored.
+   Package price and duration are saved in the booking; overlap checks use duration.
+2. Mark a real booking Completed. The row offers Send review link: WhatsApp,
+   Telegram share, or Copy. Review URLs contain a non-guessable signature.
+   Feedback -> private issues, positive ratings, resolution and failed-alert retry.
+   Google Maps is accessible at ANY rating when its review URL is configured.
+   No fake positive review is prefilled; customers write their own words.
+   Review gating/selective positive solicitation is intentionally not implemented.
+3. Connect Telegram token and owner Chat ID, /start the bot, then enable the
+   daily summary. Default time 21:00, default timezone Europe/Warsaw (configurable).
+   Automatic delivery is OFF until enabled. Summary uses Completed only for revenue;
+   Cancelled and NoShow are counted separately. Mixed currencies use current FX;
+   FX date is shown, including fallback when offline. This is not accounting data.
+   The Dashboard test button actually calls Telegram; it does NOT fake success.
+4. ?demo=1 -> quiz, feedback sandbox, or fictional report in one tap.
+   /feedback/demo never stores feedback or notifies anyone.
+   The public report preview is fictional; real test sending requires admin auth.
+   Load sample data creates 4 fictional completed bookings and 4 ratings:
+   2, 5, 5, 3. Marked DEMO and excluded from real daily reports. Import is idempotent.
 
-4. Storage and tracking:
-   - Contact list, draft, action history and opt-outs: this browser localStorage.
-   - Demo configurations, views and first/last open: SQLite on the server.
-   - Each outbound row has its own immutable random-keyed link. Contact numbers
-     and offer text are not sent to the short-link API. Names/niches ARE stored.
-   - Views count visible JS-loaded demo sessions, deduplicated per tab session.
-     Reloading a link in the same session does not inflate the counter.
-     It is NOT a message read receipt or a reliable unique-person metric.
-     Plain GET/HEAD requests and most link-preview bots do not count.
-     Sender preview links use ?inspect=1 and are not counted.
-     Stats refresh every 15 seconds while Outbound is visible.
-   - Export backup before clearing browser data. Restoring preserves link keys;
-     server creates or resolves the same links. No cross-device sync of contacts.
+SCHEDULING / OPERATIONS
+One deployment = one business (not a multi-tenant platform).
+The asyncio scheduler runs inside the application, checking every 30 seconds.
+Keep the process always on; sleeping/serverless hosts cannot deliver on time.
+The persistent SQLite delivery ledger prevents normal duplicate daily sends across
+workers/restarts. Failed sends retry up to three times with a five-minute backoff.
+An external send cannot be made exactly-once across a crash between Telegram
+accepting it and recording success; rare duplicate delivery remains possible.
+Missed time is caught up on the same business day after restart, not prior days.
+Business appointment times are local-naive; Feedback.created_at is UTC, and
+review/report day boundaries respect the configured IANA business timezone.
+Legacy v6 customer lookup by phone is retained; add OTP verification before using
+that lookup for sensitive customer histories. The public demo never reads them.
 
-5. Niches and demo isolation:
-   /d/... and legacy /?niche=... show localized EN/PL catalogs, PLN demo prices,
-   niche copy and imagery. Test appointments do NOT modify real bookings or
-   send Telegram messages. The normal root page without niche keeps CRM data.
-   Remote logo color sampling happens in the browser. If the image host denies
-   CORS or the image is inaccessible, the default niche palette is retained.
-   Manual design/theme switching overrides automatic sampling.
+TESTS
+python -m pip install -r requirements-dev.txt
+pytest -q tests/test_v7.py
+python -m compileall -q .
+node --check static/js/quiz.js   (repeat for each static/js/*.js file)
+python -m playwright install --with-deps chromium
+Start a clean isolated server; then:
+TEST_BASE_URL=http://127.0.0.1:8178 python tests/browser_v7.py
+Browser suite writes only to that isolated server, including 1 real test booking;
+never point it at a production database. APIs use isolated temp DB and mocked TG.
 
-6. Railway:
-   Use the included Procfile. Add a persistent volume mounted at /data and set
-   DATA_DIR=/data so SQLite short links and view counts survive redeployment.
-   IMPORTANT: when moving an existing install, back up its salon.db first and
-   copy it into the chosen DATA_DIR BEFORE running the new build. Never delete
-   the DB to upgrade. New tables are added automatically on startup.
-   Use your real public HTTPS domain when generating links, not localhost.
-   One running instance with SQLite; multi-instance deployments need Postgres
-   plus shared session/rate-limit storage. Existing admin sessions are in RAM
-   and require sign-in again after restart. Existing logo/avatar uploads in
-   static/uploads require separate persistent storage (unchanged from v4).
-
-7. Testing:
-   pip install -r requirements-dev.txt
-   python -m pytest -q
-   node tests/parser.test.js
-   Browser checks: install Chromium with python -m playwright install chromium;
-   on Linux also install browser system dependencies. Run uvicorn on port 8075
-   using a disposable DATA_DIR, then python tests/browser_checks.py.
-   The browser test NEVER opens or sends actual WhatsApp messages.
-
-8. Scope / before real customer-data production:
-   This release extends the v4 boilerplate; no software can promise zero errors.
-   New short-link creation/statistics APIs require admin authorization. All
-   imported text is escaped in the new UI, URLs validated, API writes atomic.
-   The inherited v4 phone-only client lookup is not identity verification: replace
-   it with OTP or signed management links before using real customer data. Also
-   harden inherited admin password storage/session policy and add regular backups.
-   Outbound should be used only for lawful, appropriate contacts; honor opt-outs.
-   External photos/fonts can be unavailable. Utility CSS is bundled locally;
-   the deployed application needs no Node/Vite/Webpack build or Tailwind CDN.
+VERIFIED DURING RELEASE
+23 API tests including legacy-schema upgrade, signed price/duration, concurrent
+booking conflict, token privacy, sandbox isolation and persistent report dedup.
+Mobile Chromium: all 4 niches, dynamic EN/PL, packages, real booking, completed
+review action, feedback, new settings and no-logo live short-link generator.
+Two independent curl cookie sessions share the outbound lead workspace.
+Live Telegram delivery was NOT verified with real credentials (none supplied).

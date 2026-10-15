@@ -1,55 +1,115 @@
-/* Immutable links: editing the builder NEVER changes a link already sent to a lead. */
-(() => {
-  const fields=['name','logo','niche','layout','theme','demo'];
-  const input=id=>document.getElementById('pv-'+id);
-  let serial=0,timer,active,lastConfig='',readyPath='',scheduledConfig='';
-  const status=document.getElementById('pv-status'),copyBtn=document.getElementById('pv-copy');
-  function read(){return {brand:input('name').value.trim(),logo:input('logo').value.trim(),niche:input('niche').value,layout:input('layout').value,theme:input('theme').value,demo:input('demo').checked};}
-  async function persist(config,version){
-    try{
-      const data=await Outreach.api('/api/admin/demo-links',config,active.signal);
-      if(version!==serial)return;
-      readyPath=data.path;input('url').value=location.origin+readyPath;
-      const open=document.getElementById('pv-open');open.href=input('url').value+'?inspect=1';
-      open.removeAttribute('aria-disabled');open.style.pointerEvents='';
-      copyBtn.disabled=false;status.textContent='Ready · changes are saved automatically';lastConfig=JSON.stringify(config);
-    }catch(e){if(e.name!=='AbortError'&&version===serial){status.textContent=e.message;input('url').value='';scheduledConfig='';}}
+// Live preview-links builder. Saved automatically as you type.
+(function () {
+  if (!window.Outreach) return;
+  const fieldIds = ['pv-name','pv-logo','pv-niche','pv-layout','pv-theme'];
+  const sel = (id) => document.getElementById(id);
+  const state = { serial: 0, ready: null, pending: null };
+
+  function cfg() {
+    const logoRaw = (sel('pv-logo').value || '').trim();
+    return {
+      brand: (sel('pv-name').value || '').trim().slice(0,60),
+      logo: Outreach._safeUrl(logoRaw) || null,
+      niche: sel('pv-niche').value || 'beauty',
+      layout: sel('pv-layout').value || 'auto',
+      theme: sel('pv-theme').value || 'auto',
+      demo: sel('pv-demo').checked,
+    };
   }
-  function changed(){
-    const config=read();const signature=JSON.stringify(config);if(signature===scheduledConfig)return;scheduledConfig=signature;Outreach.save('preview-builder-v5',config);
-    const version=++serial;clearTimeout(timer);active?.abort();active=new AbortController();
-    copyBtn.disabled=true;readyPath='';input('url').value='';
-    const open=document.getElementById('pv-open');open.removeAttribute('href');open.setAttribute('aria-disabled','true');open.style.pointerEvents='none';
-    status.textContent='Saving your short link…';
-    timer=setTimeout(()=>persist(config,version),180);
+
+  function renderStatus(text, kind) {
+    const st = sel('pv-status');
+    if (!st) return;
+    st.textContent = text;
+    st.style.color = kind === 'err' ? '#ff8a8a' : (kind === 'ok' ? '#6fd06c' : '#8a93a3');
   }
-  // Logo: Ctrl+V / drag-and-drop / file picker -> uploaded, field filled with the stored path
-  const thumb=document.getElementById('pv-logo-thumb');
-  function showThumb(){const v=input('logo').value.trim();if(v&&Outreach.validLogo(v)){thumb.src=v;thumb.referrerPolicy='no-referrer';thumb.classList.remove('hidden');}else thumb.classList.add('hidden');}
-  async function setLogoFile(file){
-    status.textContent='Uploading logo…';
-    try{input('logo').value=await Outreach.uploadLogo(file);showThumb();changed();}
-    catch(e){status.textContent=e.message;}
+
+  function setReady(ready) {
+    state.ready = ready;
+    const urlEl = sel('pv-url');
+    const open = sel('pv-open');
+    const copy = sel('pv-copy');
+    if (!ready) {
+      urlEl.value = '';
+      copy.disabled = true; open.setAttribute('href', '#');
+      renderStatus('Saving your short link…', 'idle');
+      return;
+    }
+    const full = location.origin + ready.path;
+    urlEl.value = full;
+    open.setAttribute('href', full + '?inspect=1');
+    copy.disabled = false;
+    renderStatus('Ready · changes are saved automatically', 'ok');
   }
-  input('logo').addEventListener('paste',e=>{const f=Outreach.imageFromClipboard(e);if(f){e.preventDefault();setLogoFile(f);}});
-  // pasting anywhere inside this section (outside other text fields) also works
-  document.addEventListener('paste',e=>{
-    const sec=document.getElementById('sec-preview');if(!sec||sec.classList.contains('hidden')||e.target===input('logo'))return;
-    if(['INPUT','TEXTAREA','SELECT'].includes(e.target.tagName))return;
-    const f=Outreach.imageFromClipboard(e);if(f){e.preventDefault();setLogoFile(f);}
-  });
-  input('logo').addEventListener('dragover',e=>e.preventDefault());
-  input('logo').addEventListener('drop',e=>{const f=[...(e.dataTransfer?.files||[])].find(x=>x.type.startsWith('image/'));if(f){e.preventDefault();setLogoFile(f);}});
-  document.getElementById('pv-logo-file').addEventListener('change',e=>{const f=e.target.files[0];e.target.value='';if(f)setLogoFile(f);});
-  input('logo').addEventListener('input',showThumb);
-  const draft=Outreach.load('preview-builder-v5',null);
-  if(draft){for(const field of fields){if(field==='demo')input(field).checked=draft.demo??true;else input(field).value=draft[field==='name'?'brand':field]??'';}}
-  showThumb();
-  fields.forEach(field=>{input(field).addEventListener('input',changed);input(field).addEventListener('change',changed);});
-  copyBtn.addEventListener('click',async()=>{
-    if(!readyPath)return;
-    try{await Outreach.copy(input('url').value);const text=copyBtn.textContent;copyBtn.textContent='Copied';setTimeout(()=>copyBtn.textContent=text,1300);}catch(e){status.textContent=e.message;}
-  });
-  window.initPreviewLinks=()=>{if(!readyPath)changed();};
-  window.addEventListener('online',()=>{if(!readyPath){scheduledConfig='';changed();}});
+
+  async function persist() {
+    const serial = ++state.serial;
+    const data = cfg();
+    setReady(null);
+    Outreach.save('preview-builder-v6', data);
+    try {
+      const r = await Outreach.api('/api/admin/demo-links', { method: 'POST', body: data });
+      if (serial !== state.serial) return; // ignore stale
+      if (!r.path) throw new Error('Server returned no link.');
+      setReady(r);
+    } catch (e) {
+      if (serial !== state.serial) return;
+      renderStatus('Could not save short link: ' + e.message, 'err');
+      setReady(null); // do not trash a previously generated link
+    }
+  }
+
+  function debounce(fn, ms) {
+    let t = null;
+    return (...args) => {
+      clearTimeout(t);
+      t = setTimeout(() => fn(...args), ms);
+    };
+  }
+
+  function init() {
+    if (!sel('pv-name')) return;
+    const draft = Outreach.load('preview-builder-v6') || {};
+    sel('pv-name').value = draft.brand || '';
+    sel('pv-logo').value = draft.logo || '';
+    sel('pv-niche').value = draft.niche || 'beauty';
+    sel('pv-layout').value = draft.layout || 'auto';
+    sel('pv-theme').value = draft.theme || 'auto';
+    sel('pv-demo').checked = draft.demo !== false;
+    const debounced = debounce(persist, 220);
+    fieldIds.forEach(id => {
+      const el = sel(id); if (!el) return;
+      el.addEventListener('input', debounced);
+      el.addEventListener('change', debounced);
+    });
+    sel('pv-copy').addEventListener('click', async (ev) => {
+      ev.preventDefault();
+      const url = sel('pv-url').value;
+      if (!url) return;
+      try {
+        await Outreach.copy(url);
+        const old = sel('pv-copy').textContent;
+        sel('pv-copy').textContent = '✓ Copied';
+        setTimeout(() => { sel('pv-copy').textContent = old; }, 1300);
+      } catch (e) {
+        renderStatus(e.message, 'err');
+      }
+    });
+    if (!draft.brand) persist();
+    else persist(); // rehydrate saved path
+  }
+
+  Outreach._safeUrl = function (v) {
+    if (!v) return '';
+    v = v.trim();
+    if (/^(javascript|data|vbscript):/i.test(v)) return '';
+    if (!/^https?:\/\//i.test(v)) return '';
+    return v.slice(0, 500);
+  };
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
+  } else {
+    init();
+  }
 })();

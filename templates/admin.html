@@ -1,663 +1,222 @@
-<!DOCTYPE html>
-<html lang="en" data-theme="dark">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>CRM — Booking</title>
-  <link rel="stylesheet" href="/static/css/utilities.css">
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/static/css/main.css" />
-</head>
-<body class="antialiased">
+<!doctype html><html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Salon CRM</title>
+<link rel="stylesheet" href="/static/css/main.css">
+<link rel="stylesheet" href="/static/css/utilities.css">
+<style>
+.crm-nav { display:flex; gap:10px; padding:14px; border-bottom:1px solid var(--line); background:rgba(0,0,0,.35); }
+.crm-nav button { background:transparent; color:var(--txt); border:1px solid var(--line); padding:8px 14px; border-radius:8px; cursor:pointer; }
+.crm-nav button.on { background:var(--acc); color:#000; border-color:var(--acc); }
+.sec { display:none; padding:24px; }
+.sec.on { display:block; }
+.tile-grid { display:grid; grid-template-columns: repeat(auto-fit, minmax(160px,1fr)); gap:14px; }
+.tile { background:var(--surface); border:1px solid var(--line); border-radius:12px; padding:14px; }
+.tile .v { font-size: 28px; font-family:var(--serif); }
+.tile .l { color:var(--muted); font-size:12px; text-transform:uppercase; letter-spacing:.06em; }
+table.bookings { width:100%; border-collapse:collapse; font-size:14px; }
+table.bookings th, table.bookings td { padding:8px 10px; text-align:left; border-bottom:1px solid var(--line); }
+table.bookings th { color:var(--muted); font-weight:500; }
+.tag { display:inline-block; padding:2px 8px; border-radius:6px; font-size:11px; background:var(--bg2); border:1px solid var(--line); }
+.tag-New { color:var(--muted); }
+.tag-Confirmed { background:#1a3a25; color:#6fd06c; border-color:#1a3a25; }
+.tag-Completed { background:#1a2f4a; color:#9ab7ff; border-color:#1a2f4a; }
+.tag-Cancelled { background:#3a1a1a; color:#ff8a8a; border-color:#3a1a1a; }
+.modal { background: var(--surface); border:1px solid var(--line); border-radius:16px; padding:18px; max-width:520px; width:100%; }
+.modal-back { position:fixed; inset:0; background:rgba(0,0,0,.6); display:none; align-items:center; justify-content:center; z-index:80; }
+.modal-back.on { display:flex; }
+</style>
+<link rel="stylesheet" href="/static/css/growth.css"></head><body>
 
-<!-- LOGIN -->
-<div id="login-view" class="min-h-screen flex items-center justify-center px-5">
-  <div class="surface border brd rounded-2xl p-8 w-full max-w-sm">
-    <h1 class="text-xl font-bold">Booking CRM</h1>
-    <p class="dim text-sm mt-1 mb-6">Default password: <code>admin123</code> — change it after first login.</p>
-    <input id="pwd" type="password" class="field" placeholder="Password" />
-    <button onclick="login()" class="btn-accent w-full mt-4 py-3 rounded-xl font-bold">Sign in</button>
-    <p id="login-err" class="text-red-400 text-sm mt-3 hidden"></p>
+<div class="crm-nav">
+  <button class="on" data-show="dashboard">Dashboard</button>
+  <button data-show="bookings">Bookings</button>
+  <button data-show="team">Team</button>
+  <button data-show="services">Services</button>
+  <button data-show="outreach">Preview links</button>
+  <button data-show="settings">Settings</button>
+  <button data-show="outbound" style="margin-left:auto">📣 Outbound</button>
+  <button id="logout-btn">Log out</button>
+</div>
+
+<div id="login-panel" style="max-width:380px;margin:120px auto">
+  <div class="tile" style="padding:28px">
+    <h2 style="font-family:var(--serif)">Admin sign-in</h2>
+    <input type="password" id="login-pw" placeholder="Password" style="width:100%;padding:10px;margin-top:10px;border-radius:8px;border:1px solid var(--line);background:var(--bg2);color:var(--txt)">
+    <button class="cta" id="login-btn" style="width:100%;margin-top:14px">Sign in</button>
+    <div id="login-msg" class="muted" style="margin-top:8px"></div>
   </div>
 </div>
 
-<!-- CRM SHELL -->
-<div id="dash-view" class="hidden min-h-screen lg:flex">
-  <aside class="surface border-r brd lg:w-56 lg:min-h-screen p-4 flex lg:flex-col gap-2 flex-wrap sticky top-0 self-start z-40">
-    <div class="font-extrabold text-lg px-2 py-2 w-full">Booking CRM</div>
-    <button class="nav-btn" data-sec="dashboard" onclick="show('dashboard')">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/></svg>
-      Dashboard</button>
-    <button class="nav-btn" data-sec="bookings" onclick="show('bookings')">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
-      Bookings</button>
-    <button class="nav-btn" data-sec="waitlist" onclick="show('waitlist')">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
-      Waitlist</button>
-    <button class="nav-btn" data-sec="team" onclick="show('team')">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-      Team</button>
-    <button class="nav-btn" data-sec="services" onclick="show('services')">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M20 4 8.12 15.88M14.47 14.48 20 20M8.12 8.12 12 12"/></svg>
-      Services</button>
-    <button class="nav-btn" data-sec="preview" onclick="show('preview')">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
-      Preview links</button>
-    <a class="nav-btn" href="/admin/outbound">Outbound ↗</a>
-    <button class="nav-btn" data-sec="settings" onclick="show('settings')">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
-      Settings</button>
-    <div class="lg:mt-auto flex lg:flex-col gap-2 w-full px-2">
-      <a href="/" target="_blank" class="dim text-sm underline">View site ↗</a>
-      <button onclick="logout()" class="text-sm text-red-400 text-left">Log out</button>
-    </div>
-  </aside>
+<div class="container" id="main-panel" style="display:none">
 
-  <main class="flex-1 p-5 lg:p-8 max-w-6xl w-full mx-auto space-y-6">
-
-    <!-- DASHBOARD -->
-    <section id="sec-dashboard" class="crm-sec space-y-6">
-      <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <div class="kpi-card"><div class="dim text-xs uppercase tracking-wider">Bookings today</div><div id="kpi-today" class="kpi-num">—</div></div>
-        <div class="kpi-card"><div class="dim text-xs uppercase tracking-wider">Upcoming 7 days</div><div id="kpi-week" class="kpi-num">—</div></div>
-        <div class="kpi-card"><div class="dim text-xs uppercase tracking-wider">Revenue 30 days</div><div id="kpi-rev30" class="kpi-num accent">—</div></div>
-        <div class="kpi-card"><div class="dim text-xs uppercase tracking-wider">Repeat clients</div><div id="kpi-repeat" class="kpi-num">—</div></div>
-      </div>
-      <div class="surface border brd rounded-2xl p-5 flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h2 class="font-bold">Demo data</h2>
-          <p class="dim text-xs mt-1">Load realistic bookings & waitlist for sales presentations (safe to skip on production).</p>
-        </div>
-        <button onclick="seedSample()" class="btn-accent px-5 py-2.5 rounded-xl font-semibold text-sm">Load sample data</button>
-      </div>
-      <div class="surface border brd rounded-2xl p-5">
-        <h2 class="font-bold mb-1">Load — last 14 days</h2>
-        <p class="dim text-xs mb-4">Bookings per day (cancelled excluded). Spot busy days at a glance.</p>
-        <div class="bar-wrap" id="chart-daily"></div>
-        <div class="flex" id="chart-daily-lbl"></div>
-      </div>
-      <div class="grid lg:grid-cols-2 gap-6">
-        <div class="surface border brd rounded-2xl p-5">
-          <h2 class="font-bold mb-4">Booking statuses</h2>
-          <div class="flex items-center gap-6">
-            <div class="donut" id="donut"></div>
-            <div id="status-legend" class="space-y-2 text-sm"></div>
-          </div>
-        </div>
-        <div class="surface border brd rounded-2xl p-5">
-          <h2 class="font-bold mb-1">Peak hours</h2>
-          <p class="dim text-xs mb-4">When clients book most — plan staff shifts around it.</p>
-          <div class="bar-wrap" style="height:6rem" id="chart-hours"></div>
-        </div>
-      </div>
-      <div class="grid lg:grid-cols-2 gap-6">
-        <div class="surface border brd rounded-2xl p-5">
-          <h2 class="font-bold mb-4">Top services</h2>
-          <div id="top-services" class="space-y-3 text-sm"></div>
-        </div>
-        <div class="surface border brd rounded-2xl p-5">
-          <h2 class="font-bold mb-4">Master leaderboard — 30 days</h2>
-          <table class="w-full text-sm">
-            <thead class="dim text-xs uppercase"><tr>
-              <th class="text-left py-1">Master</th><th class="text-right">Bookings</th><th class="text-right">Revenue</th></tr></thead>
-            <tbody id="staff-board"></tbody>
-          </table>
-        </div>
-      </div>
-    </section>
-
-    <!-- BOOKINGS -->
-    <section id="sec-bookings" class="crm-sec hidden">
-      <div class="surface border brd rounded-2xl p-5 overflow-x-auto">
-        <div class="flex items-center justify-between mb-4">
-          <h2 class="font-bold">Bookings</h2>
-          <span id="bk-count" class="dim text-xs"></span>
-        </div>
-        <table class="w-full text-sm" style="min-width:44rem">
-          <thead class="dim text-xs uppercase"><tr>
-            <th class="text-left py-2">When</th><th class="text-left">Client</th>
-            <th class="text-left">Contact</th><th class="text-left">Service</th>
-            <th class="text-left">Master</th><th class="text-left">Status</th></tr></thead>
-          <tbody id="bookings-body"></tbody>
-        </table>
-      </div>
-    </section>
-
-    <!-- WAITLIST -->
-    <section id="sec-waitlist" class="crm-sec hidden">
-      <div class="surface border brd rounded-2xl p-5">
-        <h2 class="font-bold mb-1">Waitlist</h2>
-        <p class="dim text-xs mb-4">Clients who found no free slot and asked to be called back. Contact them (icon), then mark as done.</p>
-        <div id="waitlist-list" class="divide-y" style="border-color:var(--border)"></div>
-      </div>
-    </section>
-
-    <!-- TEAM -->
-    <section id="sec-team" class="crm-sec hidden">
-      <div class="surface border brd rounded-2xl p-5">
-        <h2 class="font-bold mb-1">Team</h2>
-        <p class="dim text-xs mb-4">Each master gets personal Telegram alerts once their chat ID is set
-          (they must open your bot, press /start, then send you their ID from @userinfobot).</p>
-        <div class="grid md:grid-cols-4 gap-3 mb-3">
-          <input id="nt-name" class="field" placeholder="Name" />
-          <input id="nt-role" class="field" placeholder="Role, e.g. Barber" />
-          <input id="nt-tg" class="field" placeholder="Telegram chat ID" />
-          <button onclick="addStaff()" class="btn-accent rounded-xl font-semibold">+ Add</button>
-        </div>
-        <div id="team-list" class="divide-y" style="border-color:var(--border)"></div>
-      </div>
-    </section>
-
-    <!-- SERVICES -->
-    <section id="sec-services" class="crm-sec hidden">
-      <div class="surface border brd rounded-2xl p-5">
-        <h2 class="font-bold mb-4">Services</h2>
-        <div class="grid md:grid-cols-4 gap-3 mb-3">
-          <input id="ns-name" class="field" placeholder="Name" />
-          <input id="ns-price" type="number" class="field" placeholder="Price (base currency)" />
-          <input id="ns-dur" type="number" class="field" placeholder="Minutes" />
-          <button onclick="addService()" class="btn-accent rounded-xl font-semibold">+ Add</button>
-        </div>
-        <div id="services-list" class="divide-y" style="border-color:var(--border)"></div>
-      </div>
-    </section>
-
-    <!-- PREVIEW LINK GENERATOR -->
-    <section id="sec-preview" class="crm-sec hidden">
-      <div class="surface border brd rounded-2xl p-5 space-y-4">
-        <h2 class="font-bold">Personalized preview link</h2>
-        <p class="dim text-xs">Generate a ready-to-send link for any salon in seconds. The site opens with THEIR name, logo,
-        brand-matched colors (auto-analyzed from the logo) and niche imagery — without touching your shared demo database.</p>
-        <div class="grid md:grid-cols-2 gap-3">
-          <input id="pv-name" class="field" placeholder="Salon name, e.g. BarberHouse Warsaw" />
-          <div class="flex items-center gap-2">
-            <img id="pv-logo-thumb" class="h-11 w-11 rounded-lg object-contain border brd hidden" alt="" />
-            <input id="pv-logo" class="field flex-1" placeholder="Logo: paste URL or press Ctrl+V with an image" />
-            <label class="border brd rounded-lg px-3 py-2 text-xs cursor-pointer whitespace-nowrap">Upload<input id="pv-logo-file" type="file" accept="image/*" hidden /></label>
-          </div>
-          <select id="pv-niche" class="field">
-            <option value="beauty">Niche: Beauty salon</option>
-            <option value="barber">Niche: Barbershop</option>
-            <option value="auto">Niche: Car dealership</option>
-            <option value="detailing">Niche: Detailing studio</option>
-          </select>
-          <div class="grid grid-cols-2 gap-3">
-            <select id="pv-layout" class="field">
-              <option value="">Layout: auto</option>
-              <option value="classic">Classic</option><option value="split">Split</option>
-              <option value="bold">Bold</option><option value="minimal">Minimal</option>
-              <option value="glass">Glass</option><option value="poster">Poster</option>
-              <option value="cards">Cards</option>
-            </select>
-            <select id="pv-theme" class="field">
-              <option value="">Theme: auto from logo</option>
-              <option value="light">White</option><option value="dark">Dark</option>
-              <option value="gold">Gold</option><option value="rose">Rose</option>
-            </select>
-          </div>
-        </div>
-        <label class="flex items-center gap-2 text-sm dim">
-          <input type="checkbox" id="pv-demo" checked /> Include design switcher (?demo=1) for live pitching
-        </label>
-        <p id="pv-status" class="dim text-sm" role="status">Change any field to prepare a short link automatically.</p>
-        <div id="pv-result">
-          <div class="flex gap-2 mt-2 flex-wrap">
-            <input id="pv-url" class="field" readonly onclick="this.select()" />
-            <button id="pv-copy" disabled class="btn-accent px-6 py-4 rounded-xl font-bold text-base whitespace-nowrap" type="button">📋 Copy Link</button>
-          </div>
-          <a id="pv-open" target="_blank" rel="noopener noreferrer" class="dim text-xs underline mt-2 inline-block">Open preview ↗</a>
-        </div>
-      </div>
-    </section>
-
-    <!-- SETTINGS -->
-    <section id="sec-settings" class="crm-sec hidden space-y-6">
-      <div class="surface border brd rounded-2xl p-5">
-        <h2 class="font-bold mb-4">Site settings</h2>
-        <label class="dim text-xs">Company name</label>
-        <input id="s-name" class="field mt-1 mb-3" />
-        <label class="dim text-xs">Description</label>
-        <textarea id="s-desc" class="field mt-1 mb-3" rows="3"></textarea>
-        <div class="grid md:grid-cols-3 gap-3 mb-3">
-          <div><label class="dim text-xs">Opening hours</label>
-            <input id="s-hours" class="field mt-1" placeholder="09:00-20:00" /></div>
-          <div><label class="dim text-xs">Slot step (min)</label>
-            <input id="s-step" type="number" class="field mt-1" /></div>
-          <div><label class="dim text-xs">Base currency</label>
-            <select id="s-cur" class="field mt-1">
-              <option>PLN</option><option>EUR</option><option>USD</option>
-            </select></div>
-        </div>
-        <label class="dim text-xs">Logo</label>
-        <div class="flex items-center gap-4 mt-1 mb-4">
-          <img id="logo-preview" class="h-14 w-14 rounded-full object-cover border brd hidden" alt="" />
-          <input id="s-logo" type="file" accept="image/*" class="field" />
-        </div>
-        <p class="dim text-xs mb-4">Pick a photo or press Ctrl+V to paste one from the clipboard — the built-in cropper frames it into a perfect circle, and the server normalizes it to a clean 512px PNG automatically.</p>
-        <button onclick="saveSettings()" class="btn-accent w-full py-2.5 rounded-xl font-semibold">Save settings</button>
-      </div>
-
-      <div class="surface border brd rounded-2xl p-5">
-        <h2 class="font-bold mb-1">Telegram — manager account</h2>
-        <p class="dim text-xs mb-4">One bot for the whole salon (via @BotFather). This chat receives EVERY booking and cancellation; masters get only their own.</p>
-        <label class="dim text-xs">Bot token</label>
-        <input id="tg-token" class="field mt-1 mb-3" placeholder="123456:ABC-DEF…" />
-        <label class="dim text-xs">Manager chat ID (from @userinfobot)</label>
-        <input id="tg-chat" class="field mt-1 mb-4" placeholder="123456789" />
-        <button onclick="saveTelegram()" class="btn-accent w-full py-2.5 rounded-xl font-semibold">Connect & test</button>
-      </div>
-
-      <div class="surface border brd rounded-2xl p-5">
-        <h2 class="font-bold mb-4">Change password</h2>
-        <input id="old-pwd" type="password" class="field mb-3" placeholder="Current password" />
-        <input id="new-pwd" type="password" class="field mb-4" placeholder="New password (min 6 chars)" />
-        <button onclick="changePwd()" class="btn-accent w-full py-2.5 rounded-xl font-semibold">Update</button>
-      </div>
-    </section>
-  </main>
-</div>
-
-<!-- LOGO CROPPER MODAL -->
-<div id="crop-modal" class="modal hidden">
-  <div class="modal-card" style="max-width:22rem">
-    <h3 class="font-bold mb-3">Frame your logo</h3>
-    <canvas id="crop-canvas" width="320" height="320" class="w-full rounded-xl border brd touch-none" style="background:var(--surface-2)"></canvas>
-    <input id="crop-zoom" type="range" min="1" max="3" step="0.01" value="1" class="w-full mt-3" />
-    <div class="flex gap-3 mt-4">
-      <button onclick="closeCropper()" class="field text-center cursor-pointer" type="button">Cancel</button>
-      <button onclick="saveCropped()" class="btn-accent flex-1 py-2.5 rounded-xl font-semibold" type="button">Use this logo</button>
-    </div>
+<section class="sec on" id="sec-dashboard">
+  <h2>Dashboard</h2>
+  <div class="tile-grid" id="stats-tiles"></div>
+  <div style="margin-top:24px"><canvas id="chart-14d" width="900" height="200" style="width:100%;max-width:900px;background:var(--surface);border-radius:12px"></canvas></div>
+  <div class="tile-grid" style="margin-top:16px">
+    <div class="tile"><div class="l">Status mix</div><div id="status-mix"></div></div>
+    <div class="tile"><div class="l">Peak hours</div><div id="peak-hours"></div></div>
+    <div class="tile"><div class="l">Top services (30 d)</div><div id="top-services"></div></div>
+    <div class="tile"><div class="l">Masters (30 d)</div><div id="staff-board"></div></div>
   </div>
-</div>
+</section>
 
-<!-- STAFF EDIT MODAL -->
-<div id="edit-staff-modal" class="modal hidden">
-  <div class="modal-card">
-    <div class="flex items-center justify-between mb-4">
-      <h3 class="font-bold text-lg">Edit master</h3>
-      <button onclick="closeStaffEdit()" class="dim text-2xl leading-none" type="button">&times;</button>
-    </div>
-    <input id="es-id" type="hidden" />
-    <label class="dim text-xs">Photo (auto-normalized to a clean 512px PNG)</label>
-    <div class="flex items-center gap-3 mt-1 mb-3">
-      <img id="es-avatar-preview" class="hidden h-12 w-12 rounded-full object-cover border brd" alt="" />
-      <input id="es-avatar" type="file" accept="image/*" class="field" />
-    </div>
-    <label class="dim text-xs">Name</label>
-    <input id="es-name" class="field mt-1 mb-3" />
-    <label class="dim text-xs">Role</label>
-    <input id="es-role" class="field mt-1 mb-3" />
-    <label class="dim text-xs">Personal Telegram chat ID — bookings assigned to this master arrive here</label>
-    <input id="es-tg" class="field mt-1 mb-4" placeholder="123456789" />
-    <button onclick="saveStaffEdit()" class="btn-accent w-full py-2.5 rounded-xl font-semibold" type="button">Save</button>
+<section class="sec" id="sec-bookings">
+  <h2>Bookings</h2>
+  <div class="flex-row" style="display:flex;gap:10px;align-items:center">
+    <input id="b-q" placeholder="Search name or phone">
+    <select id="b-status">
+      <option value="all">All status</option>
+      <option>New</option><option>Confirmed</option><option>Completed</option><option>Cancelled</option><option>NoShow</option>
+    </select>
+    <button class="cta" id="b-refresh">Refresh</button>
   </div>
+  <table class="bookings" style="margin-top:14px">
+    <thead><tr><th>When</th><th>Client</th><th>Contact</th><th>Service</th><th>Master</th><th>Price</th><th>Status</th><th></th></tr></thead>
+    <tbody id="b-rows"></tbody>
+  </table>
+</section>
+
+<section class="sec" id="sec-team">
+  <h2>Team</h2>
+  <button class="cta" onclick="document.getElementById('staff-modal').classList.add('on')">+ Add master</button>
+  <div id="staff-list" style="margin-top:14px"></div>
+</section>
+
+<section class="sec" id="sec-services">
+  <h2>Services</h2>
+  <button class="cta" onclick="document.getElementById('service-modal').classList.add('on')">+ Add service</button>
+  <div id="service-list" style="margin-top:14px"></div>
+</section>
+
+<section class="sec" id="sec-outreach">
+  <h2>Personalized preview link</h2>
+  <p class="muted">Link updates live as you type — share with a lead, then track views.</p>
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px">
+    <label>Brand<input id="pv-name" maxlength="60" placeholder="BarberHouse Warsaw"></label>
+    <label>Logo URL<input id="pv-logo" maxlength="500" placeholder="https://…/logo.png (optional)"></label>
+    <label>Niche
+      <select id="pv-niche">
+        <option value="beauty">Beauty salon</option>
+        <option value="barber" selected>Barber shop</option>
+        <option value="auto">Auto service</option>
+        <option value="detailing">Detailing studio</option>
+      </select>
+    </label>
+    <label>Layout
+      <select id="pv-layout">
+        <option value="auto">Auto (matches logo)</option>
+        <option value="classic">Classic</option>
+        <option value="split">Split Hero</option>
+        <option value="bold">Bold Studio</option>
+        <option value="minimal">Minimal</option>
+        <option value="glass">Glass</option>
+        <option value="poster">Poster</option>
+        <option value="cards">Cards (bento)</option>
+      </select>
+    </label>
+    <label>Theme
+      <select id="pv-theme">
+        <option value="auto">Auto from logo</option>
+        <option value="light">Light</option>
+        <option value="dark">Dark</option>
+        <option value="gold">Luxury Gold</option>
+        <option value="rose">Rose</option>
+      </select>
+    </label>
+  </div>
+  <div style="margin-top:14px"><label><input type="checkbox" id="pv-demo" checked> Include design switcher (?demo=1) for live pitching</label></div>
+  <div style="margin-top:14px;display:flex;gap:10px;align-items:center">
+    <input id="pv-url" readonly style="flex:1;padding:10px;border-radius:8px;border:1px solid var(--line);background:var(--bg2);color:var(--muted)">
+    <button class="cta" id="pv-copy">📋 Copy Link</button>
+    <a class="btn-ghost" id="pv-open" href="#" target="_blank" rel="noopener">Open</a>
+  </div>
+  <div id="pv-status" class="muted" style="margin-top:10px"></div>
+  <h3 style="margin-top:30px">Recent demo links</h3>
+  <table class="bookings"><thead><tr><th>Code</th><th>Brand</th><th>Views</th><th>First</th><th>Last</th><th></th></tr></thead><tbody id="dl-rows"></tbody></table>
+</section>
+
+<section class="sec" id="sec-settings">
+  <h2>Settings</h2>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+    <label>Site name<input id="s-name"></label>
+    <label>Currency
+      <select id="s-currency"><option>PLN</option><option>EUR</option><option>USD</option></select>
+    </label>
+    <label style="grid-column:1/-1">Site description<textarea id="s-desc" rows="2"></textarea></label>
+    <label>Language
+      <select id="s-language"><option value="en">English</option><option value="pl">Polski</option></select>
+    </label>
+    <label>Working hours<input id="s-hours" placeholder="09:00-20:00"></label>
+    <label>Slot step (min)<input id="s-step" type="number" min="5" max="120" value="30"></label>
+    <label>Telegram bot token
+      <input id="s-tg-token" placeholder="from @BotFather">
+    </label>
+    <label>Telegram manager chat id
+      <input id="s-tg-chat" placeholder="numeric id (start /start in your bot first)">
+    </label>
+  </div>
+  <div style="margin-top:14px">
+    <button class="cta" id="s-save">Save settings</button>
+  </div>
+  <h3 style="margin-top:30px">Logo</h3>
+  <div style="display:flex;gap:14px;align-items:center">
+    <img id="s-logo" src="" alt="" style="width:84px;height:84px;border-radius:50%;object-fit:cover;background:var(--line)">
+    <input type="file" id="s-logo-file" accept="image/*">
+    <button class="cta" id="s-logo-upload">Upload logo</button>
+  </div>
+</section>
+
+<section class="sec" id="sec-outbound">
+  <iframe src="/admin/outbound" style="width:100%;height:calc(100vh - 100px);border:0;background:var(--bg)" title="Outbound workspace"></iframe>
+</section>
+
 </div>
 
-<div id="toast" class="toast"></div>
+<div class="modal-back" id="service-modal"><div class="modal">
+  <h3>Add service</h3>
+  <input id="sv-name" placeholder="Men's Haircut">
+  <textarea id="sv-desc" placeholder="Description" style="margin-top:8px"></textarea>
+  <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:8px">
+    <input id="sv-price" type="number" placeholder="Price" min="0">
+    <input id="sv-duration" type="number" placeholder="Minutes" min="5">
+    <select id="sv-niche"><option value="all">all</option><option value="barber">barber</option><option value="beauty">beauty</option><option value="auto">auto</option><option value="detailing">detailing</option></select>
+  </div>
+  <button class="cta" id="sv-add" style="margin-top:14px">Save</button>
+  <button class="btn-ghost" onclick="this.closest('.modal-back').classList.remove('on')">Close</button>
+</div></div>
 
-<script>
-const $ = (s) => document.querySelector(s);
-const token = () => localStorage.getItem("admin-token") || "";
-const ICON_WA = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>`;
-const ICON_TG = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2 11 13"/><path d="M22 2 15 22l-4-9-9-4 20-7z"/></svg>`;
-const ICON_TEL = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92z"/></svg>`;
+<div class="modal-back" id="staff-modal"><div class="modal">
+  <h3>Add master</h3>
+  <input id="st-name" placeholder="Alex Kowalski">
+  <input id="st-role" placeholder="Senior Barber" style="margin-top:8px">
+  <textarea id="st-bio" placeholder="Short bio" style="margin-top:8px"></textarea>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px">
+    <input id="st-hours" placeholder="09:00-20:00">
+    <input id="st-tg" placeholder="Telegram chat ID">
+  </div>
+  <button class="cta" id="st-add" style="margin-top:14px">Save</button>
+  <button class="btn-ghost" onclick="this.closest('.modal-back').classList.remove('on')">Close</button>
+</div></div>
 
-function toast(m) { const t = $("#toast"); t.textContent = m; t.classList.add("show");
-  setTimeout(() => t.classList.remove("show"), 3000); }
+<div class="modal-back" id="staff-edit"><div class="modal">
+  <h3>Edit master</h3>
+  <input id="st-edit-name">
+  <input id="st-edit-role" style="margin-top:8px">
+  <textarea id="st-edit-bio" style="margin-top:8px"></textarea>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px">
+    <input id="st-edit-hours" placeholder="09:00-20:00">
+    <input id="st-edit-tg" placeholder="Telegram chat ID">
+  </div>
+  <div style="margin-top:14px;display:flex;gap:10px;align-items:center">
+    <img id="st-edit-avatar" src="" style="width:64px;height:64px;border-radius:50%;object-fit:cover;background:var(--line)">
+    <input type="file" id="st-edit-avatar-file" accept="image/*">
+    <button class="cta" id="st-edit-avatar-upload">Upload</button>
+  </div>
+  <button class="cta" id="st-edit-save" style="margin-top:14px">Save</button>
+  <button class="btn-ghost" onclick="this.closest('.modal-back').classList.remove('on')">Close</button>
+</div></div>
 
-async function api(url, opts = {}) {
-  opts.headers = { ...(opts.headers || {}), "X-Admin-Token": token() };
-  if (opts.body && typeof opts.body === "string")
-    opts.headers["Content-Type"] = "application/json";
-  const r = await fetch(url, opts);
-  if (r.status === 401) { logout(); throw new Error("Session expired"); }
-  const data = await r.json().catch(() => ({}));
-  if (!r.ok) throw new Error(data.detail || "Request failed");
-  return data;
-}
-
-async function login() {
-  try {
-    const r = await fetch("/api/admin/login", { method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ password: $("#pwd").value }) });
-    const data = await r.json();
-    if (!r.ok) throw new Error(data.detail);
-    localStorage.setItem("admin-token", data.token);
-    boot();
-  } catch (e) { $("#login-err").textContent = e.message; $("#login-err").classList.remove("hidden"); }
-}
-function logout() {
-  localStorage.removeItem("admin-token");
-  $("#dash-view").classList.add("hidden");
-  $("#login-view").classList.remove("hidden");
-}
-async function boot() {
-  try { await api("/api/admin/verify"); } catch { return; }
-  $("#login-view").classList.add("hidden");
-  $("#dash-view").classList.remove("hidden");
-  show("dashboard");
-  loadAll();
-}
-
-function show(sec) {
-  document.querySelectorAll(".crm-sec").forEach(s => s.classList.add("hidden"));
-  $("#sec-" + sec).classList.remove("hidden");
-  document.querySelectorAll(".nav-btn").forEach(b =>
-    b.classList.toggle("nav-active", b.dataset.sec === sec));
-  if (sec === "dashboard") loadStats();
-  if (sec === "waitlist") loadWaitlist();
-  if (sec === "preview") window.initPreviewLinks?.();
-}
-
-async function loadAll() {
-  const s = await api("/api/admin/settings");
-  $("#s-name").value = s.company_name;
-  $("#s-desc").value = s.description;
-  $("#s-hours").value = s.opening_hours;
-  $("#s-step").value = s.slot_step;
-  $("#s-cur").value = s.currency || "PLN";
-  $("#tg-token").value = s.telegram_token || "";
-  $("#tg-chat").value = s.telegram_chat_id || "";
-  if (s.logo_url) { $("#logo-preview").src = s.logo_url; $("#logo-preview").classList.remove("hidden"); }
-  loadServices(); loadStaff(); loadBookings(); loadStats();
-}
-
-/* ---------- sample data ---------- */
-async function seedSample() {
-  try {
-    const r = await api("/api/admin/seed-sample", { method: "POST" });
-    if (r.ok) { toast(`Loaded ${r.bookings} demo bookings`); loadStats(); loadBookings(); }
-    else toast(r.detail || "Already loaded");
-  } catch (e) { toast(e.message); }
-}
-
-/* ---------- dashboard stats ---------- */
-function renderStats(st) {
-  const cur = st.currency;
-  $("#kpi-today").textContent = st.today_count;
-  $("#kpi-week").textContent = st.upcoming_7d;
-  $("#kpi-rev30").textContent = st.revenue_30d.toLocaleString() + " " + cur;
-  $("#kpi-repeat").textContent = st.repeat_rate + "%";
-
-  const maxC = Math.max(1, ...st.daily.map(d => d.count));
-  $("#chart-daily").innerHTML = st.daily.map(d =>
-    `<div class="bar" style="height:${Math.max(3, d.count / maxC * 100)}%" title="${d.date}: ${d.count} bookings, ${d.revenue} ${cur}"></div>`).join("");
-  $("#chart-daily-lbl").innerHTML = st.daily.map((d, i) =>
-    `<div class="bar-lbl">${i % 2 ? "" : d.date.split(" ")[0]}</div>`).join("");
-
-  const sc = st.status_counts, total = Math.max(1, Object.values(sc).reduce((a, b) => a + b, 0));
-  const colors = { New: "#60a5fa", Confirmed: "#4ade80", Completed: "#a3a3a3", Cancelled: "#f87171" };
-  let acc = 0, stops = [];
-  for (const k of ["New", "Confirmed", "Completed", "Cancelled"]) {
-    const pct = sc[k] / total * 100;
-    stops.push(`${colors[k]} ${acc}% ${acc + pct}%`);
-    acc += pct;
-  }
-  $("#donut").style.background = `conic-gradient(${stops.join(",")})`;
-  $("#status-legend").innerHTML = Object.entries(sc).map(([k, v]) =>
-    `<div class="flex items-center gap-2"><span class="w-3 h-3 rounded-full inline-block" style="background:${colors[k]}"></span>${k} — <b>${v}</b></div>`).join("");
-
-  const maxH = Math.max(1, ...st.peak_hours.map(h => h.count));
-  $("#chart-hours").innerHTML = st.peak_hours.filter(h => h.hour >= 6 && h.hour <= 23).map(h =>
-    `<div class="bar" style="height:${Math.max(3, h.count / maxH * 100)}%" title="${h.hour}:00 — ${h.count}"></div>`).join("");
-
-  const maxS = Math.max(1, ...st.top_services.map(s => s.count));
-  $("#top-services").innerHTML = st.top_services.length ? st.top_services.map(s => `
-    <div><div class="flex justify-between mb-1"><span>${s.name}</span>
-      <span class="dim">${s.count} bookings · ${s.revenue.toLocaleString()} ${cur}</span></div>
-      <div class="hbar" style="width:${s.count / maxS * 100}%"></div></div>`).join("")
-    : `<span class="dim">No data yet.</span>`;
-
-  $("#staff-board").innerHTML = st.staff_board.length ? st.staff_board.map(s => `
-    <tr class="border-t brd"><td class="py-2">${s.name}</td>
-      <td class="text-right">${s.count}</td>
-      <td class="text-right font-semibold">${s.revenue.toLocaleString()} ${cur}</td></tr>`).join("")
-    : `<tr><td colspan="3" class="py-4 text-center dim">No data yet.</td></tr>`;
-}
-async function loadStats() { renderStats(await api("/api/admin/stats")); }
-
-/* ---------- bookings ---------- */
-const STATUSES = ["New", "Confirmed", "Completed", "Cancelled"];
-function contactCell(b) {
-  const wa = b.phone.replace(/\D/g, "");
-  if (b.contact_method === "WhatsApp")
-    return `<a class="icon-link" target="_blank" href="https://wa.me/${wa}" title="Open WhatsApp chat">${ICON_WA}</a>`;
-  if (b.contact_method === "Telegram" && b.contact_handle)
-    return `<a class="icon-link" target="_blank" href="https://t.me/${b.contact_handle.replace("@","")}" title="Open Telegram">${ICON_TG}</a> <span class="dim text-xs">${b.contact_handle}</span>`;
-  return `<a class="icon-link" href="tel:${b.phone}" title="Call">${ICON_TEL}</a>`;
-}
-async function loadBookings() {
-  const rows = await api("/api/admin/bookings");
-  $("#bk-count").textContent = rows.length + " total";
-  $("#bookings-body").innerHTML = rows.length ? rows.map(b => `
-    <tr class="border-t brd">
-      <td class="py-3 pr-3 whitespace-nowrap">
-        <div class="font-semibold">${new Date(b.start_time).toLocaleString("en-GB", { day:"2-digit", month:"short", hour:"2-digit", minute:"2-digit" })}</div>
-        <div class="dim text-xs">→ ${new Date(b.end_time).toLocaleTimeString("en-GB", { hour:"2-digit", minute:"2-digit" })}</div></td>
-      <td class="pr-3"><div>${b.client_name}</div>
-        <a class="dim text-xs underline" href="tel:${b.phone}">${b.phone}</a></td>
-      <td class="pr-3">${contactCell(b)}</td>
-      <td class="pr-3">${b.service_name}</td>
-      <td class="pr-3 font-semibold">${b.staff_name}</td>
-      <td class="whitespace-nowrap"><span class="badge b-${b.status}">${b.status}</span>
-        <select class="status-sel ml-2" onchange="setStatus(${b.id}, this.value)">
-          ${STATUSES.map(s => `<option ${s === b.status ? "selected" : ""}>${s}</option>`).join("")}
-        </select></td>
-    </tr>`).join("")
-    : `<tr><td colspan="6" class="py-8 text-center dim">No bookings yet.</td></tr>`;
-}
-async function setStatus(id, status) {
-  try {
-    await api(`/api/admin/bookings/${id}/status`, { method: "PATCH", body: JSON.stringify({ status }) });
-    loadBookings(); toast("Status: " + status);
-  } catch (e) { toast(e.message); }
-}
-
-/* ---------- waitlist ---------- */
-async function loadWaitlist() {
-  const rows = await api("/api/admin/waitlist");
-  $("#waitlist-list").innerHTML = rows.length ? rows.map(w => {
-    const wa = w.phone.replace(/\D/g, "");
-    const contact = w.contact_method === "WhatsApp"
-      ? `<a class="icon-link" target="_blank" href="https://wa.me/${wa}">${ICON_WA}</a>`
-      : w.contact_method === "Telegram" && w.contact_handle
-        ? `<a class="icon-link" target="_blank" href="https://t.me/${w.contact_handle.replace("@","")}">${ICON_TG}</a>`
-        : `<a class="icon-link" href="tel:${w.phone}">${ICON_TEL}</a>`;
-    return `<div class="py-3 flex items-center justify-between gap-3">
-      <div><span class="font-semibold">${w.client_name}</span>
-        <span class="dim text-xs ml-2">${w.phone}</span>
-        <div class="dim text-xs">${w.service_name} · ${w.staff_name} · wants ${w.date_pref || "any day"}</div></div>
-      <div class="flex items-center gap-3">${contact}
-        <button onclick="resolveWl(${w.id})" class="dim text-sm underline">Done</button></div>
-    </div>`;
-  }).join("") : `<div class="py-6 text-center dim text-sm">Waitlist is empty.</div>`;
-}
-async function resolveWl(id) {
-  await api(`/api/admin/waitlist/${id}`, { method: "DELETE" });
-  loadWaitlist(); toast("Resolved");
-}
-
-/* ---------- team ---------- */
-async function loadStaff() {
-  const rows = await api("/api/admin/staff");
-  $("#team-list").innerHTML = rows.filter(s => s.active).map(s => `
-    <div class="py-3 flex items-center justify-between gap-3">
-      <div class="flex items-center gap-3 min-w-0">
-        ${s.avatar_url
-          ? `<img src="${s.avatar_url}" class="avatar" style="width:2.5rem;height:2.5rem;margin:0;object-fit:cover" alt="" />`
-          : `<div class="avatar" style="width:2.5rem;height:2.5rem;margin:0;font-size:.8rem">${s.name.split(" ").map(w => w[0]).join("").slice(0,2).toUpperCase()}</div>`}
-        <div class="min-w-0"><span class="font-semibold">${s.name}</span>
-          <span class="dim text-xs ml-2">${s.role || ""}</span>
-          <div class="dim text-xs">${s.telegram_chat_id ? "Telegram: " + s.telegram_chat_id : "Telegram not connected"}</div></div>
-      </div>
-      <div class="flex gap-3 flex-shrink-0">
-        <button onclick='editStaff(${JSON.stringify(s)})' class="dim text-sm underline">Edit</button>
-        <button onclick="delStaff(${s.id})" class="text-red-400 text-sm">Delete</button>
-      </div>
-    </div>`).join("");
-}
-async function addStaff() {
-  try {
-    await api("/api/admin/staff", { method: "POST", body: JSON.stringify({
-      name: $("#nt-name").value, role: $("#nt-role").value, telegram_chat_id: $("#nt-tg").value }) });
-    $("#nt-name").value = ""; $("#nt-role").value = ""; $("#nt-tg").value = "";
-    loadStaff(); toast("Master added");
-  } catch (e) { toast(e.message); }
-}
-function editStaff(s) {
-  $("#es-id").value = s.id;
-  $("#es-name").value = s.name;
-  $("#es-role").value = s.role || "";
-  $("#es-tg").value = s.telegram_chat_id || "";
-  const p = $("#es-avatar-preview");
-  if (s.avatar_url) { p.src = s.avatar_url; p.classList.remove("hidden"); }
-  else p.classList.add("hidden");
-  $("#es-avatar").value = "";
-  $("#edit-staff-modal").classList.remove("hidden");
-}
-function closeStaffEdit() { $("#edit-staff-modal").classList.add("hidden"); }
-async function saveStaffEdit() {
-  const id = $("#es-id").value;
-  try {
-    await api(`/api/admin/staff/${id}`, { method: "PATCH", body: JSON.stringify({
-      name: $("#es-name").value, role: $("#es-role").value,
-      telegram_chat_id: $("#es-tg").value }) });
-    const f = $("#es-avatar").files[0];
-    if (f) {
-      const fd = new FormData(); fd.append("file", f);
-      await api(`/api/admin/staff/${id}/avatar`, { method: "POST", body: fd });
-    }
-    closeStaffEdit(); loadStaff(); toast("Master updated");
-  } catch (e) { toast(e.message); }
-}
-async function delStaff(id) {
-  if (!confirm("Remove this master? Past bookings stay in history.")) return;
-  await api(`/api/admin/staff/${id}`, { method: "DELETE" });
-  loadStaff();
-}
-
-/* ---------- services ---------- */
-async function loadServices() {
-  const rows = await api("/api/admin/services");
-  $("#services-list").innerHTML = rows.filter(s => s.active).map(s => `
-    <div class="py-3 flex items-center justify-between">
-      <div><span class="font-semibold">${s.name}</span>
-        <span class="dim text-xs ml-2">${s.price} · ${s.duration_min} min</span></div>
-      <button onclick="delService(${s.id})" class="text-red-400 text-sm">Delete</button>
-    </div>`).join("");
-}
-async function addService() {
-  try {
-    await api("/api/admin/services", { method: "POST", body: JSON.stringify({
-      name: $("#ns-name").value, price: Number($("#ns-price").value), duration_min: Number($("#ns-dur").value) }) });
-    $("#ns-name").value = ""; $("#ns-price").value = ""; $("#ns-dur").value = "";
-    loadServices(); toast("Service added");
-  } catch (e) { toast(e.message); }
-}
-async function delService(id) {
-  if (!confirm("Hide this service from the booking form?")) return;
-  await api(`/api/admin/services/${id}`, { method: "DELETE" });
-  loadServices();
-}
-
-/* ---------- settings ---------- */
-async function saveSettings() {
-  try {
-    await api("/api/admin/settings", { method: "PATCH", body: JSON.stringify({
-      company_name: $("#s-name").value, description: $("#s-desc").value,
-      opening_hours: $("#s-hours").value, slot_step: Number($("#s-step").value),
-      currency: $("#s-cur").value }) });
-    toast("Settings saved");
-  } catch (e) { toast(e.message); }
-}
-async function saveTelegram() {
-  try {
-    const r = await api("/api/admin/telegram", { method: "POST",
-      body: JSON.stringify({ telegram_token: $("#tg-token").value, telegram_chat_id: $("#tg-chat").value }) });
-    toast(r.bot ? `Connected to @${r.bot} — test message sent` : "Saved");
-  } catch (e) { toast(e.message); }
-}
-async function changePwd() {
-  try {
-    await api("/api/admin/password", { method: "POST", body: JSON.stringify({
-      old_password: $("#old-pwd").value, new_password: $("#new-pwd").value }) });
-    $("#old-pwd").value = ""; $("#new-pwd").value = "";
-    toast("Password updated");
-  } catch (e) { toast(e.message); }
-}
-
-/* ---------- logo cropper ---------- */
-let cropImg = null, cropZoom = 1, cropX = 0, cropY = 0, dragging = false, lastP = null;
-
-$("#s-logo").addEventListener("change", (e) => openCropper(e.target.files[0]));
-function openCropper(f) {
-  if (!f) return;
-  const img = new Image();
-  img.onload = () => { cropImg = img; cropZoom = 1; cropX = 0; cropY = 0;
-    $("#crop-zoom").value = 1; $("#crop-modal").classList.remove("hidden"); drawCrop(); };
-  img.onerror = () => toast("Could not read this image");
-  img.src = URL.createObjectURL(f);
-}
-// Ctrl+V anywhere in Settings opens the cropper with the pasted image
-document.addEventListener("paste", (e) => {
-  if ($("#sec-settings").classList.contains("hidden")) return;
-  const f = Outreach.imageFromClipboard(e);
-  if (f) { e.preventDefault(); openCropper(f); }
-});
-function closeCropper() { $("#crop-modal").classList.add("hidden"); $("#s-logo").value = ""; cropImg = null; }
-
-function drawCrop() {
-  if (!cropImg) return;
-  const c = $("#crop-canvas"), ctx = c.getContext("2d");
-  const size = c.width;
-  ctx.clearRect(0, 0, size, size);
-  const base = Math.max(size / cropImg.width, size / cropImg.height) * cropZoom;
-  const w = cropImg.width * base, h = cropImg.height * base;
-  ctx.save();
-  ctx.beginPath(); ctx.arc(size / 2, size / 2, size / 2 - 4, 0, Math.PI * 2); ctx.clip();
-  ctx.drawImage(cropImg, (size - w) / 2 + cropX, (size - h) / 2 + cropY, w, h);
-  ctx.restore();
-  ctx.strokeStyle = "rgba(255,255,255,.5)"; ctx.lineWidth = 2;
-  ctx.beginPath(); ctx.arc(size / 2, size / 2, size / 2 - 4, 0, Math.PI * 2); ctx.stroke();
-}
-$("#crop-zoom").addEventListener("input", (e) => { cropZoom = Number(e.target.value); drawCrop(); });
-const cc = $("#crop-canvas");
-cc.addEventListener("pointerdown", (e) => { dragging = true; lastP = { x: e.clientX, y: e.clientY }; cc.setPointerCapture(e.pointerId); });
-cc.addEventListener("pointermove", (e) => {
-  if (!dragging) return;
-  cropX += e.clientX - lastP.x; cropY += e.clientY - lastP.y;
-  lastP = { x: e.clientX, y: e.clientY }; drawCrop();
-});
-cc.addEventListener("pointerup", () => dragging = false);
-
-async function saveCropped() {
-  if (!cropImg) return;
-  const out = document.createElement("canvas");
-  out.width = out.height = 512;
-  const ctx = out.getContext("2d");
-  const src = $("#crop-canvas");
-  const size = src.width, base = Math.max(size / cropImg.width, size / cropImg.height) * cropZoom;
-  const k = 512 / size;
-  ctx.beginPath(); ctx.arc(256, 256, 256, 0, Math.PI * 2); ctx.clip();
-  ctx.drawImage(cropImg,
-    ((size - cropImg.width * base) / 2 + cropX) * k,
-    ((size - cropImg.height * base) / 2 + cropY) * k,
-    cropImg.width * base * k, cropImg.height * base * k);
-  const blob = await new Promise(res => out.toBlob(res, "image/png"));
-  const fd = new FormData();
-  fd.append("file", blob, "logo.png");
-  try {
-    const r = await api("/api/admin/logo", { method: "POST", body: fd });
-    $("#logo-preview").src = r.logo_url; $("#logo-preview").classList.remove("hidden");
-    toast("Logo saved");
-  } catch (e) { toast(e.message); }
-  closeCropper();
-}
-
-if (token()) boot();
-</script>
-<script src="/static/js/outreach-core.js"></script>
-<script src="/static/js/preview-links.js"></script>
-</body>
-</html>
+<script src="/static/js/i18n.js"></script><script src="/static/js/growth-ui.js"></script><script src="/static/js/crm-growth.js"></script>
+<script src="/static/js/outreach-core.js"></script><script src="/static/js/preview-links.js"></script><script src="/static/js/crm.js"></script>
+</body></html>

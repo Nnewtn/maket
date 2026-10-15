@@ -1,67 +1,74 @@
-"""Telegram notification service — fully async, never blocks the booking flow.
-
-Routing model:
-  - one bot (token) per salon, created via @BotFather
-  - MANAGER chat id lives in settings -> receives EVERY booking + cancellations
-  - each STAFF member has their own telegram_chat_id -> personal mini-account,
-    receives only bookings assigned to them (chosen or auto-assigned)
-"""
+"""Telegram notifications: manager gets every booking, masters get only their own."""
+from __future__ import annotations
+import logging
+from html import escape
+import asyncio
 import httpx
 
-API_BASE = "https://api.telegram.org/bot{token}"
+log = logging.getLogger("telegram")
 
 
-async def verify_bot_token(token: str) -> dict:
-    async with httpx.AsyncClient(timeout=10) as client:
-        resp = await client.get(API_BASE.format(token=token) + "/getMe")
-        data = resp.json()
-        if not data.get("ok"):
-            raise ValueError(data.get("description", "Invalid bot token"))
-        return data["result"]
-
-
-async def send_telegram_message(token: str, chat_id: str, text: str) -> bool:
-    """Failures are swallowed — a broken Telegram config must never
-    break the booking flow itself."""
-    if not token or not chat_id:
-        return False
+async def send(bot_token: str, chat_id: str, text: str) -> tuple[bool, str]:
+    if not bot_token or not chat_id:
+        return False, "missing bot_token or chat_id"
+    url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
+    payload = {
+        "chat_id": chat_id,
+        "text": text,
+        "parse_mode": "HTML",
+        "disable_web_page_preview": True,
+    }
     try:
-        async with httpx.AsyncClient(timeout=10) as client:
-            resp = await client.post(
-                API_BASE.format(token=token) + "/sendMessage",
-                json={"chat_id": chat_id, "text": text, "parse_mode": "HTML"},
-            )
-            return resp.status_code == 200
-    except Exception:
-        return False
+        async with httpx.AsyncClient(timeout=8.0) as cx:
+            r = await cx.post(url, json=payload)
+        if r.status_code == 200:
+            return True, "ok"
+        return False, f"{r.status_code}: {r.text[:200]}"
+    except Exception as e:
+        return False, str(e)[:200]
 
 
-def format_booking_message(company: str, client_name: str, phone: str,
-                           contact_method: str, contact_handle: str,
-                           service_name: str, price: float, currency: str,
-                           start, duration: int, staff_name: str) -> str:
-    contact_line = f"📲 Preferred contact: {contact_method}"
-    if contact_handle:
-        contact_line += f" (<code>{contact_handle}</code>)"
-    return (
-        f"💈 <b>New booking — {company}</b>\n\n"
-        f"👤 Client: <b>{client_name}</b>\n"
-        f"📞 Phone: <code>{phone}</code>\n"
-        f"{contact_line}\n"
-        f"✂️ Service: {service_name} ({price:.0f} {currency}, {duration} min)\n"
-        f"🧑‍🎨 Master: <b>{staff_name}</b>\n"
-        f"🗓 When: <b>{start.strftime('%d %b %Y, %H:%M')}</b>\n\n"
-        f"Open the CRM to confirm or cancel."
-    )
+def format_booking(*, booking, service, staff, sign: str = "") -> str:
+    """Render booking into a beautiful HTML Telegram message."""
+    parts = [
+        f"<b>{sign or 'New booking'}</b>",
+        f"<b>Client:</b> {escape(booking.client_name)}",
+        f"<b>Phone:</b> <code>{escape(booking.phone)}</code>",
+    ]
+    if booking.contact_method and booking.contact_value:
+        kind = {"call": "Phone", "wa": "WhatsApp", "tg": "Telegram"}[booking.contact_method]
+        parts.append(f"<b>{kind}:</b> {escape(booking.contact_value)}")
+    parts.append(f"<b>Service:</b> {escape(service.name) if service else '—'}")
+    if staff:
+        parts.append(f"<b>Master:</b> {escape(staff.name)}")
+    parts.append(f"<b>Date:</b> {booking.starts_at:%Y-%m-%d %H:%M}")
+    if booking.price:
+        parts.append(f"<b>Price:</b> {booking.price} {booking.currency}")
+    if booking.notes:
+        parts.append(f"<b>Notes:</b> {escape(booking.notes)}")
+    return "\n".join(parts)
 
 
-def format_cancel_message(company: str, client_name: str, service_name: str,
-                          start, staff_name: str, by_client: bool) -> str:
-    who = "by the CLIENT (self-service)" if by_client else "by the salon"
-    return (
-        f"❌ <b>Booking cancelled — {company}</b>\n\n"
-        f"👤 {client_name} · {service_name}\n"
-        f"🧑‍🎨 Master: {staff_name}\n"
-        f"🗓 Slot now free: <b>{start.strftime('%d %b %Y, %H:%M')}</b>\n"
-        f"ℹ️ Cancelled {who}."
-    )
+async def notify_booking(setting_token: str, manager_chat: str, staff_chat: str | None,
+                        booking, service, staff) -> None:
+    msg = format_booking(booking=booking, service=service, staff=staff, sign="New booking")
+    ok1, e1 = await send(setting_token, manager_chat, msg)
+    if not ok1:
+        log.warning("manager TG failed: %s", e1)
+    if staff_chat and staff_chat != manager_chat:
+        msg2 = format_booking(booking=booking, service=service, staff=staff, sign="Your booking")
+        ok2, e2 = await send(setting_token, staff_chat, msg2)
+        if not ok2:
+            log.warning("staff TG failed: %s", e2)
+
+
+def schedule_notify(background_tasks, **kw) -> None:
+    """Schedule a Telegram notification on FastAPI BackgroundTasks."""
+    background_tasks.add_task(asyncio.run, _run_notify(**kw))
+
+
+async def _run_notify(**kw) -> None:
+    try:
+        await notify_booking(**kw)
+    except Exception as e:  # never let a worker die
+        log.warning("notify task crashed: %s", e)
